@@ -149,6 +149,17 @@ export interface EngineState {
   loopSectionId?: string;
 }
 
+/** Status eines gespiegelten Backup-Rigs (M6-Redundanz). */
+export interface MirrorTargetStatus {
+  address: string;
+  port: number;
+  connected: boolean;
+  /** Zuletzt gemessene Positions-Abweichung zum Haupt-Rig (Beats). */
+  driftBeats?: number;
+  /** Anzahl automatischer Drift-Korrekturen seit Start. */
+  corrections: number;
+}
+
 /** Uhrzeit-basierte Aktion („um 20:00 → Play"). */
 export interface ClockRule {
   id: string;
@@ -169,6 +180,7 @@ export interface HostState {
   engine: EngineState;
   tracks: TrackInfo[];
   clockRules: ClockRule[];
+  mirrors: MirrorTargetStatus[];
 }
 
 export const INITIAL_TRANSPORT: TransportState = {

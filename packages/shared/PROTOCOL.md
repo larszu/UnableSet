@@ -130,6 +130,34 @@ generischen OSC-Modul von **Bitfocus Companion**.
 Program-Change → Aktion); Hardware-Anbindung optional via `@julusian/midi`
 (siehe `packages/server/src/midiMapping.ts`).
 
+### OSC-Out-Feed (Floor-Displays, Licht, Video)
+
+Mit `--osc-out host:port[,host2:port2]` sendet der Host einen herstellerneutralen
+Status-Feed (plus die `oscOnEnter`-Nachrichten des jeweiligen Songs, editierbar
+im Setlist-Editor, Zeilen-Notation `/adresse arg1 arg2 …`):
+
+| Adresse | Argumente | Wann |
+|---|---|---|
+| `/unableset/out/song` | `index` (int, 0-basiert), `titel` | Songwechsel |
+| `/unableset/out/next` | `titel` | Songwechsel (nächster Eintrag) |
+| `/unableset/out/section` | `name` | Section-Wechsel |
+| `/unableset/out/playing` | `0/1` | Play/Stop |
+
+### Redundanz (M6, `--mirror`)
+
+Mit `--mirror host:port[,…]` spiegelt der Host alle Transport-/Mixer-Kommandos
+an weitere AbletonOSC-Rigs (Backup-Rechner). Pro Ziel laufen Heartbeat und
+Drift-Messung (`current_song_time`); Abweichungen über 0,25 Beats werden bei
+laufendem Playback automatisch korrigiert — unterhalb der Schwelle greift
+nichts mehr ein. Status (verbunden/Drift/Korrekturen) erscheint im Snapshot
+(`mirrors`) und in den Settings.
+
+### Discovery
+
+Der Host announced sich per mDNS als `_unableset._tcp` (und `_http._tcp`),
+abschaltbar mit `--no-mdns`. Zusätzlich liefert `GET /api/info` die LAN-URLs
+für den QR-Code.
+
 ---
 
 ## 4. Locator-Notation (Cue-Point-Namen → Setlist)

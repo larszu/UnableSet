@@ -12,6 +12,7 @@ import type {
   EngineState,
   HostState,
   JumpMode,
+  MirrorTargetStatus,
   Setlist,
   Song,
   SongId,
@@ -73,6 +74,7 @@ export type ServerMessage =
   | { type: 'tracks'; tracks: TrackInfo[] }
   | { type: 'clockRules'; rules: ClockRule[] }
   | { type: 'bridge'; bridge: BridgeStatus }
+  | { type: 'mirrors'; mirrors: MirrorTargetStatus[] }
   | { type: 'pong'; id: number; sentAt: number; serverTime: number };
 
 // ---------------------------------------------------------------------------
@@ -114,6 +116,7 @@ const SERVER_MESSAGE_TYPES = new Set([
   'tracks',
   'clockRules',
   'bridge',
+  'mirrors',
   'pong',
 ]);
 
