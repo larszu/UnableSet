@@ -15,6 +15,7 @@ import {
   type ClockRule,
   type EngineState,
   type HostState,
+  type MirrorTargetStatus,
   type ServerMessage,
   type Setlist,
   type Song,
@@ -37,6 +38,7 @@ export class HostStore extends EventEmitter<HostStoreEvents> {
   private engine: EngineState = { ...INITIAL_ENGINE };
   private tracks: TrackInfo[] = [];
   private clockRules: ClockRule[] = [];
+  private mirrors: MirrorTargetStatus[] = [];
 
   constructor(serverVersion: string, initialBridge: BridgeStatus) {
     super();
@@ -55,6 +57,7 @@ export class HostStore extends EventEmitter<HostStoreEvents> {
       engine: this.engine,
       tracks: this.tracks,
       clockRules: this.clockRules,
+      mirrors: this.mirrors,
     };
   }
 
@@ -164,6 +167,11 @@ export class HostStore extends EventEmitter<HostStoreEvents> {
   setClockRules(rules: ClockRule[]): void {
     this.clockRules = rules;
     this.emit('broadcast', { type: 'clockRules', rules });
+  }
+
+  setMirrors(mirrors: MirrorTargetStatus[]): void {
+    this.mirrors = mirrors;
+    this.emit('broadcast', { type: 'mirrors', mirrors });
   }
 
   /** Aktualisiert Song-/Section-/Queue-Felder im Transport nach State-Änderungen. */

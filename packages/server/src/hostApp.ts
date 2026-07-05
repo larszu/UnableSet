@@ -23,6 +23,8 @@ import { HostStore } from './hostStore.js';
 import { SetlistEngine } from './setlistEngine.js';
 import { Persistence } from './persistence.js';
 import { ClockScheduler } from './clockActions.js';
+import { OscOut, type OscOutTarget } from './oscOut.js';
+import { OSC_OUT } from '@unableset/shared';
 
 export interface HostAppOptions {
   bridge: AbletonBridge;
@@ -31,6 +33,8 @@ export interface HostAppOptions {
   clientDistPath?: string;
   /** Datenordner für Setlists/Settings; ohne Angabe keine Persistenz (Tests). */
   dataDir?: string;
+  /** Ziele für den OSC-Out-Feed (Floor-Displays, Licht, Video). */
+  oscOutTargets?: OscOutTarget[];
   log?: (message: string) => void;
 }
 
@@ -79,8 +83,10 @@ export function createHostApp(options: HostAppOptions): HostApp {
 
   const rebuildSongs = () => {
     const songs = buildSongsFromCuePoints(lastCuePoints, songLengthBeats);
-    store.setSongs(songs);
+    // Engine zuerst — store.setSongs broadcastet sofort und der OSC-Out-Feed
+    // löst Songs über engine.resolvedSong auf
     engine.setSongs(songs);
+    store.setSongs(songs);
     engine.setActiveSetlist(store.getActiveSetlist());
   };
 
@@ -106,7 +112,66 @@ export function createHostApp(options: HostAppOptions): HostApp {
     }
   });
   bridge.on('tracks', (tracks) => store.setTracks(tracks));
+  bridge.on('mirrors', (mirrors) => store.setMirrors(mirrors));
   bridge.on('bridgeError', (error) => log(`Bridge-Fehler (ignoriert): ${error.message}`));
+
+  // --- OSC-Out-Feed (Floor-Displays, Licht/Video) + oscOnEnter pro Song ------
+  const oscOut = new OscOut(options.oscOutTargets ?? [], log);
+  void oscOut.open().catch((error: Error) => log(`OSC-Out nicht verfügbar: ${error.message}`));
+
+  let feedSongId: string | undefined;
+  let feedSectionId: string | undefined;
+  let feedPlaying: boolean | undefined;
+  store.on('broadcast', (message) => {
+    if (message.type !== 'transport') return;
+    const transport = message.transport;
+
+    if (transport.isPlaying !== feedPlaying) {
+      feedPlaying = transport.isPlaying;
+      oscOut.send({ address: OSC_OUT.playing, args: [transport.isPlaying ? 1 : 0] });
+    }
+
+    if (transport.currentSongId !== feedSongId) {
+      feedSongId = transport.currentSongId;
+      const setlist = store.getActiveSetlist();
+      const engineState = engine.getState();
+      let entryIndex = setlist.entries.findIndex(
+        (entry) =>
+          entry.entryId === engineState.currentEntryId &&
+          entry.songId === transport.currentSongId,
+      );
+      if (entryIndex < 0) {
+        // Engine hat (noch) keinen Eintrag — Fallback über die Song-ID
+        entryIndex = setlist.entries.findIndex(
+          (entry) => entry.songId === transport.currentSongId,
+        );
+      }
+      const entry = entryIndex >= 0 ? setlist.entries[entryIndex] : undefined;
+      const song = entry
+        ? engine.resolvedSong(entry)
+        : store.getSongs().find((candidate) => candidate.id === transport.currentSongId);
+
+      oscOut.send({
+        address: OSC_OUT.song,
+        args: [entryIndex, song?.title ?? ''],
+      });
+      const nextEntry = setlist.entries[entryIndex + 1];
+      const nextSong = nextEntry ? engine.resolvedSong(nextEntry) : undefined;
+      oscOut.send({ address: OSC_OUT.next, args: [nextSong?.title ?? ''] });
+
+      // Getimte externe Befehle des Songs (Licht-Preset, Video-Cue, …)
+      if (song?.oscOnEnter && song.oscOnEnter.length > 0) {
+        oscOut.sendAll(song.oscOnEnter);
+      }
+    }
+
+    if (transport.currentSectionId !== feedSectionId) {
+      feedSectionId = transport.currentSectionId;
+      const song = store.getSongs().find((candidate) => candidate.id === transport.currentSongId);
+      const section = song?.sections.find((candidate) => candidate.id === transport.currentSectionId);
+      oscOut.send({ address: OSC_OUT.section, args: [section?.name ?? ''] });
+    }
+  });
 
   // --- Clock-Aktionen ----------------------------------------------------------
   const clock = new ClockScheduler(
@@ -393,6 +458,7 @@ export function createHostApp(options: HostAppOptions): HostApp {
     ready,
     close: async () => {
       clock.stop();
+      oscOut.close();
       store.off('broadcast', broadcast);
       for (const client of wss.clients) client.terminate();
       await new Promise<void>((resolve) => wss.close(() => resolve()));

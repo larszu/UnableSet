@@ -11,11 +11,12 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { OscAbletonBridge } from '@unableset/bridge';
+import { MirrorBridge, OscAbletonBridge, type AbletonBridge } from '@unableset/bridge';
 import { parseConfig } from './config.js';
 import { createHostApp } from './hostApp.js';
 import { OscRemote } from './oscRemote.js';
 import { startMidiInput } from './midiMapping.js';
+import { startMdns } from './mdns.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -40,12 +41,18 @@ const log = (message: string) => {
   console.log(`[${new Date().toISOString()}] ${message}`);
 };
 
-const bridge = new OscAbletonBridge({
+const primaryBridge = new OscAbletonBridge({
   remoteAddress: config.oscHost,
   remotePort: config.oscPort,
   localPort: config.oscListenPort,
   log,
 });
+
+// M6-Redundanz: Kommandos zusätzlich an Backup-Rigs spiegeln (--mirror)
+const bridge: AbletonBridge =
+  config.mirrorTargets.length > 0
+    ? new MirrorBridge(primaryBridge, config.mirrorTargets, { log })
+    : primaryBridge;
 
 const clientDistPath = findClientDist();
 const dataDir = resolve(config.dataDir);
@@ -53,6 +60,7 @@ const appOptions: Parameters<typeof createHostApp>[0] = {
   bridge,
   serverVersion: readServerVersion(),
   dataDir,
+  oscOutTargets: config.oscOutTargets,
   log,
 };
 if (clientDistPath) appOptions.clientDistPath = clientDistPath;
@@ -83,6 +91,7 @@ const oscRemote =
     : null;
 
 let stopMidi: () => void = () => {};
+let stopMdns: () => void = () => {};
 
 void app.ready.then(async () => {
   app.httpServer.listen(config.httpPort, () => {
@@ -96,6 +105,15 @@ void app.ready.then(async () => {
   await oscRemote?.open().catch((error: Error) => {
     log(`OSC-Fernsteuerung nicht verfügbar: ${error.message}`);
   });
+
+  if (config.mdns) stopMdns = await startMdns(config.httpPort, log);
+  if (config.mirrorTargets.length > 0) {
+    log(
+      `Redundanz aktiv: spiegele Kommandos an ${config.mirrorTargets
+        .map((t) => `${t.address}:${t.port}`)
+        .join(', ')}`,
+    );
+  }
 
   stopMidi = await startMidiInput(
     dataDir,
@@ -136,6 +154,7 @@ async function shutdown(signal: string): Promise<void> {
   shuttingDown = true;
   log(`${signal} empfangen — fahre herunter …`);
   stopMidi();
+  stopMdns();
   oscRemote?.close();
   await app.close().catch(() => undefined);
   process.exit(0);
