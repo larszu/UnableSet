@@ -5,7 +5,7 @@
  */
 
 import type { EventEmitter } from 'node:events';
-import type { BridgeStatus, CuePoint, TrackInfo } from '@unableset/shared';
+import type { BridgeStatus, CuePoint, MirrorTargetStatus, TrackInfo } from '@unableset/shared';
 
 /** Roh-Transportdaten, wie die Bridge sie aus Live liest. */
 export interface BridgeTransport {
@@ -27,6 +27,8 @@ export interface AbletonBridgeEvents {
   songLength: [number];
   /** Track-Liste (Mixer) wurde (neu) gelesen. */
   tracks: [TrackInfo[]];
+  /** Status gespiegelter Backup-Rigs (nur MirrorBridge, M6). */
+  mirrors: [MirrorTargetStatus[]];
   /** Nicht-fataler Fehler (nur Logging — die Show läuft weiter). */
   bridgeError: [Error];
 }

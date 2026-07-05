@@ -295,6 +295,34 @@ export class AbletonOscSimulator {
   }
 }
 
+/**
+ * Skalierungs-Szenario: viele Songs mit Sections (Default ~2000 Cue Points)
+ * für Performance-Tests der Clients.
+ */
+export function bigSimulatorOptions(port: number, songCount = 400): AbletonOscSimulatorOptions {
+  const cuePoints: [string, number][] = [];
+  const songLengthBeats = 32;
+  for (let i = 0; i < songCount; i++) {
+    const start = i * songLengthBeats;
+    cuePoints.push([`Song ${String(i + 1).padStart(3, '0')} {Demo}`, start]);
+    cuePoints.push(['>Verse', start]);
+    cuePoints.push(['>Chorus', start + 8]);
+    cuePoints.push(['>Bridge', start + 16]);
+    cuePoints.push(['>Outro', start + 24]);
+  }
+  return {
+    port,
+    tempo: 120,
+    timeSig: [4, 4],
+    songLengthBeats: songCount * songLengthBeats,
+    cuePoints,
+    tracks: [
+      { name: 'Click', volume: 0.85, mute: false, solo: false },
+      { name: 'Playback', volume: 0.85, mute: false, solo: false },
+    ],
+  };
+}
+
 /** Demo-Session: 4 Songs mit Sections, Markern und Mixer-Tracks. */
 export function demoSimulatorOptions(port: number): AbletonOscSimulatorOptions {
   return {
