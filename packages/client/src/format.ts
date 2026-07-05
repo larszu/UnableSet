@@ -15,3 +15,13 @@ export function formatBeatsAsDuration(beats: number, bpm: number): string {
   if (bpm <= 0) return '–';
   return formatDuration(beatsToSeconds(beats, bpm));
 }
+
+/** Timecode-Anzeige "m:ss.d" für die laufende Position. */
+export function formatTimecode(beats: number, bpm: number): string {
+  if (bpm <= 0) return '0:00.0';
+  const totalSeconds = beatsToSeconds(beats, bpm);
+  const m = Math.floor(totalSeconds / 60);
+  const s = Math.floor(totalSeconds % 60);
+  const d = Math.floor((totalSeconds % 1) * 10);
+  return `${m}:${String(s).padStart(2, '0')}.${d}`;
+}
