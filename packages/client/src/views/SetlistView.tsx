@@ -6,6 +6,7 @@
  */
 
 import { useMemo, useRef, useState } from 'react';
+import { oscMessagesToText, parseOscLines } from '@unableset/shared';
 import type { Setlist, SetlistEntry, Song } from '@unableset/shared';
 import {
   resolveEntry,
@@ -319,7 +320,7 @@ function EntryRow({
         if (dragIndex.current !== null) onMove(dragIndex.current, index);
         dragIndex.current = null;
       }}
-      className={`rounded-xl border transition-colors ${
+      className={`rounded-xl border transition-colors [contain-intrinsic-block-size:64px] [content-visibility:auto] ${
         isQueued
           ? 'border-stage-warn bg-stage-warn/10'
           : isCurrent && transport.currentSongId === song.id
@@ -447,6 +448,17 @@ function EntryRow({
               />
             </label>
           </div>
+          <label className="block text-sm">
+            <span className="text-xs uppercase tracking-wider text-stage-muted">
+              OSC bei Songstart (eine Zeile = eine Nachricht, z. B. „/light/preset 3 warm")
+            </span>
+            <textarea
+              defaultValue={oscMessagesToText(song.oscOnEnter ?? [])}
+              onBlur={(event) => patchOverrides({ oscOnEnter: parseOscLines(event.target.value) })}
+              className="mt-1 w-full rounded-lg border border-stage-border bg-stage-surface-2 p-2 font-mono text-sm"
+              rows={2}
+            />
+          </label>
           <div className="flex flex-wrap gap-2">
             <ToggleChip
               label="Überspringen"
@@ -556,7 +568,7 @@ function SongLibrary({ setlist }: { setlist: Setlist }) {
       />
       <ul className="max-h-[28rem] space-y-1 overflow-y-auto">
         {filtered.map((song) => (
-          <li key={song.id}>
+          <li key={song.id} className="[contain-intrinsic-block-size:44px] [content-visibility:auto]">
             <button
               type="button"
               onClick={() => addSong(song)}

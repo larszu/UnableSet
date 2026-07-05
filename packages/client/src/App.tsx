@@ -1,5 +1,6 @@
 import { useAppStore, type ViewTab } from './store.js';
 import { useShortcuts } from './hooks/useShortcuts.js';
+import { useWakeLock } from './hooks/useWakeLock.js';
 import { PerformanceView } from './views/PerformanceView.js';
 import { SetlistView } from './views/SetlistView.js';
 import { LyricsView } from './views/LyricsView.js';
@@ -49,6 +50,7 @@ export default function App() {
   const setLocked = useAppStore((s) => s.setLocked);
 
   useShortcuts();
+  useWakeLock();
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-5xl flex-col gap-4 p-3 sm:p-6">

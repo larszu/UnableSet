@@ -6,6 +6,7 @@ import {
   type BridgeStatus,
   type ClockRule,
   type EngineState,
+  type MirrorTargetStatus,
   type ServerMessage,
   type Setlist,
   type SetlistEntry,
@@ -56,6 +57,7 @@ interface AppState {
   engine: EngineState;
   tracks: TrackInfo[];
   clockRules: ClockRule[];
+  mirrors: MirrorTargetStatus[];
 
   view: ViewTab;
   locked: boolean;
@@ -83,6 +85,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   engine: INITIAL_ENGINE,
   tracks: [],
   clockRules: [],
+  mirrors: [],
 
   view: prefs.view,
   locked: prefs.locked,
@@ -104,6 +107,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           engine: message.state.engine,
           tracks: message.state.tracks,
           clockRules: message.state.clockRules,
+          mirrors: message.state.mirrors,
         });
         break;
       case 'transport':
@@ -126,6 +130,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         break;
       case 'bridge':
         set({ bridge: message.bridge });
+        break;
+      case 'mirrors':
+        set({ mirrors: message.mirrors });
         break;
       case 'pong':
         break;

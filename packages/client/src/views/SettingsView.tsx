@@ -91,6 +91,8 @@ export function SettingsView() {
         <ClockRulesEditor rules={clockRules} locked={locked} />
       </Card>
 
+      <MirrorsCard />
+
       <Card title="Verbindung">
         <dl className="grid grid-cols-2 gap-2 text-sm">
           <dt className="text-stage-muted">Host-Version</dt>
@@ -114,6 +116,39 @@ export function SettingsView() {
         </p>
       </Card>
     </div>
+  );
+}
+
+function MirrorsCard() {
+  const mirrors = useAppStore((s) => s.mirrors);
+  if (mirrors.length === 0) return null;
+  return (
+    <Card title="Redundanz (Backup-Rigs)">
+      <ul className="space-y-2 text-sm" data-testid="mirrors-list">
+        {mirrors.map((mirror) => (
+          <li
+            key={`${mirror.address}:${mirror.port}`}
+            className="flex flex-wrap items-center gap-3 rounded-lg border border-stage-border bg-stage-surface-2 px-3 py-2"
+          >
+            <span
+              className={`h-2.5 w-2.5 rounded-full ${mirror.connected ? 'bg-stage-ok' : 'bg-stage-danger'}`}
+              aria-hidden
+            />
+            <span className="font-mono">
+              {mirror.address}:{mirror.port}
+            </span>
+            <span className="ml-auto font-mono text-stage-muted">
+              Drift: {mirror.driftBeats !== undefined ? `${mirror.driftBeats.toFixed(3)} Beats` : '–'}
+              {' · '}Korrekturen: {mirror.corrections}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="text-xs text-stage-muted">
+        Alle Transport-/Mixer-Kommandos werden gespiegelt; Drift über der Schwelle wird
+        automatisch korrigiert und stoppt, sobald die Rigs in Sync sind.
+      </p>
+    </Card>
   );
 }
 
