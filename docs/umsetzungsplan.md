@@ -1,7 +1,10 @@
 # Umsetzungsplan
 
-Stand: M0 + Bridge-Prototyp geliefert. Dieses Dokument hält die
-Architektur-Entscheidungen, den Plan für M1–M9 und die offenen Fragen fest.
+Stand: **M0–M5 geliefert** plus Teile von M7/M8 (QR, TTS, Clock-Aktionen,
+Show-Presets, Zwei-Listen-Prinzip). Offen: M6 (Multi-Host-Redundanz),
+Canvas/Scripting/Electron/mDNS (M7), Multi-File/BandHelper (M8), PWA-Härtung +
+Listen-Virtualisierung (M9), Lyrics aus MIDI-Clips, MIDI-Learn-UI.
+Dieses Dokument hält die Architektur-Entscheidungen und offenen Fragen fest.
 
 ## Getroffene Entscheidungen (M0)
 
