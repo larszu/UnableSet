@@ -149,7 +149,7 @@ function EntryList({ setlist }: { setlist: Setlist }) {
   const locked = useAppStore((s) => s.locked);
   const state = useAppStore((s) => s);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const dragIndex = useRef<number | null>(null);
+  const dragIndexRef = useRef<number | null>(null);
 
   const updateSetlist = (mutate: (entries: SetlistEntry[]) => SetlistEntry[]) => {
     send({ type: 'setlistUpdate', setlist: { ...setlist, entries: mutate([...setlist.entries]) } });
@@ -182,7 +182,17 @@ function EntryList({ setlist }: { setlist: Setlist }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setlist, state.songs]);
 
-  let lastGroup: string | undefined;
+  // Erster Eintrag jeder Set-Gruppe trägt die Überschrift (keine Render-Mutation)
+  const groupHeaderFor = new Map<string, string>();
+  {
+    let previousGroup: string | undefined;
+    for (const entry of setlist.entries) {
+      if (entry.setGroup && entry.setGroup !== previousGroup) {
+        groupHeaderFor.set(entry.entryId, entry.setGroup);
+      }
+      previousGroup = entry.setGroup;
+    }
+  }
 
   return (
     <section className="rounded-2xl border border-stage-border bg-stage-surface p-4">
@@ -214,9 +224,7 @@ function EntryList({ setlist }: { setlist: Setlist }) {
             const song = resolveEntry(state, entry);
             const played = engine.playedEntryIds.includes(entry.entryId);
             if (engine.hidePlayed && played) return null;
-            const groupHeader =
-              entry.setGroup !== lastGroup && entry.setGroup ? entry.setGroup : null;
-            lastGroup = entry.setGroup;
+            const groupHeader = groupHeaderFor.get(entry.entryId) ?? null;
             return (
               <li key={entry.entryId}>
                 {groupHeader ? (
@@ -238,7 +246,7 @@ function EntryList({ setlist }: { setlist: Setlist }) {
                   }
                   onMove={moveEntry}
                   onUpdate={updateSetlist}
-                  dragIndex={dragIndex}
+                  dragIndexRef={dragIndexRef}
                 />
               </li>
             );
@@ -258,7 +266,7 @@ function EntryRow({
   onToggleExpand,
   onMove,
   onUpdate,
-  dragIndex,
+  dragIndexRef,
 }: {
   entry: SetlistEntry;
   song: Song | undefined;
@@ -268,7 +276,7 @@ function EntryRow({
   onToggleExpand: () => void;
   onMove: (from: number, to: number) => void;
   onUpdate: (mutate: (entries: SetlistEntry[]) => SetlistEntry[]) => void;
-  dragIndex: React.MutableRefObject<number | null>;
+  dragIndexRef: React.MutableRefObject<number | null>;
 }) {
   const transport = useAppStore((s) => s.transport);
   const engine = useAppStore((s) => s.engine);
@@ -313,12 +321,12 @@ function EntryRow({
       draggable={!locked}
       data-testid={`entry-${index}`}
       onDragStart={() => {
-        dragIndex.current = index;
+        dragIndexRef.current = index;
       }}
       onDragOver={(event) => event.preventDefault()}
       onDrop={() => {
-        if (dragIndex.current !== null) onMove(dragIndex.current, index);
-        dragIndex.current = null;
+        if (dragIndexRef.current !== null) onMove(dragIndexRef.current, index);
+        dragIndexRef.current = null;
       }}
       className={`rounded-xl border transition-colors [contain-intrinsic-block-size:64px] [content-visibility:auto] ${
         isQueued
