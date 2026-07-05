@@ -1,10 +1,18 @@
 # Umsetzungsplan
 
-Stand: **M0–M5 geliefert** plus Teile von M7/M8 (QR, TTS, Clock-Aktionen,
-Show-Presets, Zwei-Listen-Prinzip). Offen: M6 (Multi-Host-Redundanz),
-Canvas/Scripting/Electron/mDNS (M7), Multi-File/BandHelper (M8), PWA-Härtung +
-Listen-Virtualisierung (M9), Lyrics aus MIDI-Clips, MIDI-Learn-UI.
+Stand: **M0–M6 und M9 geliefert** plus Teile von M7/M8 (QR, mDNS, OSC-Out-
+Feed, TTS, Clock-Aktionen, Show-Presets, Zwei-Listen-Prinzip, PWA,
+2000+-Marker-Skalierung). Offen: Canvas/Scripting + Electron-Hülle (M7),
+Multi-File-Projekte/BandHelper-Import (M8), Lyrics aus MIDI-Clips,
+MIDI-Learn-UI, Weg B (Max for Live).
 Dieses Dokument hält die Architektur-Entscheidungen und offenen Fragen fest.
+
+**M6-Design:** Die Redundanz spiegelt Kommandos (Play/Stop/Jumps/Position/
+Mixer) per OSC an weitere AbletonOSC-Rigs und hält sie über Drift-Messung +
+Korrektur (Schwelle 0,25 Beats) in Sync — die Korrektur greift nur über der
+Schwelle und „schaltet sich ab", sobald die Rigs synchron laufen. Bewusst
+kein eigenes Host-zu-Host-Protokoll: die Backup-Maschine braucht nur Live +
+AbletonOSC, keinen zweiten UnableSet-Host.
 
 ## Getroffene Entscheidungen (M0)
 

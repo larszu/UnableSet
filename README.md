@@ -30,9 +30,15 @@ Setlist — **ohne die Live-Session anzufassen** und **ohne Internetverbindung**
   Rest im Set, nächster Song
 - **Fernsteuerung**: Tastatur-Shortcuts, OSC-In (TouchOSC / Open Stage
   Control / **Bitfocus Companion**), MIDI-Mapping (Fußcontroller, optional)
+- **OSC-Out-Feed** an Floor-Displays/Licht/Video (herstellerneutral) +
+  `oscOnEnter`-Befehle pro Song (z. B. Licht-Preset beim Songstart)
+- **Redundanz (M6)**: `--mirror` spiegelt alle Kommandos an Backup-Rigs,
+  misst Drift und korrigiert automatisch — bis alle in Sync sind
 - **Clock-Aktionen**: „um 20:00 → Play" (Show-Start, Curfew)
-- **QR-Code** zum schnellen Verbinden weiterer Geräte, **TTS-Ansage** des
-  Songtitels (In-Ear-Assistenz, lokal via Web Speech API)
+- **QR-Code** + **mDNS** (`_unableset._tcp`) zum schnellen Verbinden,
+  **TTS-Ansage** des Songtitels (In-Ear-Assistenz, lokal via Web Speech API)
+- **PWA**: installierbar (Add-to-Homescreen), Offline-Shell per Service
+  Worker, Screen-Wake-Lock; skaliert auf 2000+ Marker (E2E-getestet)
 - **Bühnentauglich**: Host crasht nie hart, Clients reconnecten automatisch
   mit vollem State-Snapshot, alles offline-first
 
@@ -120,6 +126,9 @@ pnpm screenshots        # README-Screenshots headless neu erzeugen
 | `--osc-listen-port` | `11001` | Antwort-Port |
 | `--osc-remote-port` | `9000` | OSC-Fernsteuerung (0 = aus) |
 | `--data-dir` | `./unableset-data` | Setlists/Settings (Tipp: in den Live-Projektordner legen — dann zieht beim Umzug alles mit) |
+| `--mirror` | – | Backup-Rigs für Redundanz, z. B. `192.168.1.20:11000` |
+| `--osc-out` | – | Ziele für den Status-Feed, z. B. `192.168.1.30:8000` |
+| `--no-mdns` | – | mDNS-Advertising abschalten |
 
 Der Host läuft headless auf macOS, Windows und Raspberry Pi 5 (arm64) —
 z. B. als systemd-Service mit `Restart=always` (Watchdog).
@@ -179,10 +188,12 @@ MIDI einfach deaktiviert.
   Safe Mode, Autoplay/STOP, Loops), Persistenz (atomar + Backup), Protokoll-
   Guards, MIDI-Matcher, Clock-Regeln, OSC-Bridge gegen simuliertes AbletonOSC
   (echtes UDP), WebSocket-Roundtrip mit 3 Clients
-- **8 Headless-E2E-Tests** (Playwright, Chromium) gegen den kompletten Stack
+- **10 Headless-E2E-Tests** (Playwright, Chromium) gegen den kompletten Stack
   (Simulator + Host + gebauter Client): Verbinden/Snapshot, Play/Stop,
   Queue + Jump (stehend/laufend), Sections, Mixer, Sperre,
-  Reorder + Reload-Persistenz
+  Reorder + Reload-Persistenz, 2000-Cue-Points-Skalierung, PWA-Auslieferung
+- **M6-Redundanz** unit- und CLI-getestet mit zwei Simulatoren (Spiegelung,
+  Drift-Korrektur, Reconnect)
 
 ## Meilenstein-Status
 
@@ -192,10 +203,10 @@ MIDI einfach deaktiviert.
 - [x] **M3** – Setlist-Editor: Drag & Drop, Overrides, Farben/Notizen/Tags/Suche, mehrere Setlists, Import/Export, Song mehrfach, Sets
 - [x] **M4** – Lyrics/Views: Teleprompter mit Akkorden + Auto-Scroll, sperrbare Views, Beat-Feedback *(Lyrics-Quelle: Setlist-Overrides; MIDI-Clip-Sync folgt)*
 - [x] **M5** – MIDI/OSC/Mixer: OSC-In/Out, MIDI-Mapping (Datei, Hardware optional), Mixer mit Lock *(MIDI-Learn-UI folgt)*
-- [ ] **M6** – Redundanz (Multi-Host-Sync mit Drift-Korrektur)
-- [x] **M7 (teilweise)** – QR-Code; *Canvas/Scripting, mDNS, Electron-Hülle folgen*
+- [x] **M6** – Redundanz: Kommando-Spiegelung an Backup-Rigs mit Drift-Messung + Auto-Korrektur (`--mirror`)
+- [x] **M7 (teilweise)** – QR-Code, mDNS, OSC-Floor-Display-Feed; *Canvas/Scripting, Electron-Hülle folgen*
 - [x] **M8 (teilweise)** – Show-Presets (mehrere Setlists), Zwei-Listen-Prinzip, TTS-Ansage, Clock-Aktionen; *Multi-File-Projekte, BandHelper-Import folgen*
-- [ ] **M9** – Politur: PWA-Service-Worker, 2000+-Marker-Virtualisierung
+- [x] **M9** – Politur: PWA (Manifest/SW/Wake-Lock/Icons), 2000+-Marker-Skalierung (content-visibility, E2E-getestet)
 
 Details und offene Architektur-Entscheidungen:
 [docs/umsetzungsplan.md](docs/umsetzungsplan.md)
