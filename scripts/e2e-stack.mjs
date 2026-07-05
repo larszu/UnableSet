@@ -18,9 +18,14 @@ const OSC_LISTEN_PORT = process.env.E2E_OSC_LISTEN_PORT ?? '18101';
 const bridgeModule = await import(
   pathToFileURL(join(root, 'packages/bridge/dist/index.js')).href
 );
-const { AbletonOscSimulator, demoSimulatorOptions } = bridgeModule;
+const { AbletonOscSimulator, bigSimulatorOptions, demoSimulatorOptions } = bridgeModule;
 
-const simulator = new AbletonOscSimulator(demoSimulatorOptions(Number(OSC_PORT)));
+// E2E_SCENARIO=big → 400 Songs / 2000 Cue Points (Skalierungstest)
+const options =
+  process.env.E2E_SCENARIO === 'big'
+    ? bigSimulatorOptions(Number(OSC_PORT))
+    : demoSimulatorOptions(Number(OSC_PORT));
+const simulator = new AbletonOscSimulator(options);
 await simulator.open();
 console.log(`[e2e-stack] Simulator auf UDP :${OSC_PORT}`);
 
