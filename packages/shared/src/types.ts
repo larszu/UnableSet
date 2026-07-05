@@ -49,6 +49,8 @@ export interface Song {
   tags: string[];
   color?: string;
   notes?: string;
+  /** Lyrics/Chords als Text; Zeilen mit führendem "." werden als Akkordzeile gerendert. */
+  lyrics?: string;
   startBeat: number;
   lengthBeats: number;
   bpm?: number;
@@ -96,6 +98,8 @@ export interface TransportState {
 
 export type JumpMode = 'quantized' | 'endOfSection' | 'endOfSong' | 'dynamic' | 'manual';
 
+export const JUMP_MODES: JumpMode[] = ['quantized', 'endOfSection', 'endOfSong', 'dynamic', 'manual'];
+
 export type ViewRole = 'md' | 'musician' | 'singer' | 'crew' | 'solo';
 
 /** Roh-Daten eines Ableton-Locators (Cue Point), wie von der Bridge geliefert. */
@@ -113,13 +117,58 @@ export interface BridgeStatus {
   lastHeartbeatAt?: number;
 }
 
+/** Ableton-Track im Mixer (Auszug des Live Object Model). */
+export interface TrackInfo {
+  index: number;
+  name: string;
+  /** 0..1 (Live-Mixer-Skala) */
+  volume: number;
+  mute: boolean;
+  solo: boolean;
+}
+
+/** Geplanter Sprung (Queue) — Song und optional Section. */
+export interface QueuedJump {
+  songId: SongId;
+  /** Eintrag in der aktiven Setlist, falls über die Setlist gecuet. */
+  entryId?: string;
+  sectionId?: string;
+}
+
+/** Zustand der Setlist-/Jump-Engine des Hosts. */
+export interface EngineState {
+  jumpMode: JumpMode;
+  safeMode: boolean;
+  preRollBars: number;
+  hidePlayed: boolean;
+  queued?: QueuedJump;
+  /** Aktiver Eintrag der Setlist (bestimmt „nächster Song" bei Autoplay). */
+  currentEntryId?: string;
+  playedEntryIds: string[];
+  /** Section-Loop aktiv? (Ableton-Loop-Bracket um die Section gelegt) */
+  loopSectionId?: string;
+}
+
+/** Uhrzeit-basierte Aktion („um 20:00 → Play"). */
+export interface ClockRule {
+  id: string;
+  /** "HH:MM" (lokale Zeit des Hosts) */
+  at: string;
+  action: 'play' | 'stop' | 'continue' | 'nextSong';
+  enabled: boolean;
+}
+
 /** Vollständiger Host-Zustand — geht als Snapshot an jeden (re)verbundenen Client. */
 export interface HostState {
   serverVersion: string;
   bridge: BridgeStatus;
   transport: TransportState;
   songs: Song[];
-  setlist: Setlist;
+  setlists: Setlist[];
+  activeSetlistId: string;
+  engine: EngineState;
+  tracks: TrackInfo[];
+  clockRules: ClockRule[];
 }
 
 export const INITIAL_TRANSPORT: TransportState = {
@@ -131,3 +180,23 @@ export const INITIAL_TRANSPORT: TransportState = {
   bpm: 120,
   timeSig: [4, 4],
 };
+
+export const INITIAL_ENGINE: EngineState = {
+  jumpMode: 'quantized',
+  safeMode: false,
+  preRollBars: 0,
+  hidePlayed: false,
+  playedEntryIds: [],
+};
+
+/** Wendet Setlist-Overrides auf einen Song an (Projekt bleibt unangetastet). */
+export function songWithOverrides(song: Song, entry: SetlistEntry | undefined): Song {
+  if (!entry?.overrides) return song;
+  const merged: Song = { ...song };
+  for (const [key, value] of Object.entries(entry.overrides)) {
+    if (value !== undefined) {
+      (merged as unknown as Record<string, unknown>)[key] = value;
+    }
+  }
+  return merged;
+}

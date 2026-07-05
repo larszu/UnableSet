@@ -1,9 +1,10 @@
 # UnableSet – Protokoll-Referenz
 
-Dieses Dokument beschreibt die beiden Schnittstellen des Hosts:
+Dieses Dokument beschreibt die drei Schnittstellen des Hosts:
 
 1. **WebSocket-Protokoll** Host ↔ Browser-Clients (`packages/shared/src/protocol.ts`)
 2. **OSC-Protokoll** Host ↔ Ableton Live (`packages/shared/src/oscAddresses.ts`)
+3. **OSC-Fernsteuerung** des Hosts (TouchOSC, Open Stage Control, Bitfocus Companion)
 
 Grundsatz: **Der Host ist die einzige Wahrheitsquelle.** Clients sind
 synchronisierte Ansichten. Jeder State-Change wird an alle Clients
@@ -23,32 +24,51 @@ Snapshot.
 
 | `type` | Payload | Bedeutung |
 |---|---|---|
-| `hello` | `role?`, `deviceName?` | Selbstauskunft nach Connect (View-Preset, Anzeige im Host) |
-| `ping` | `id`, `sentAt` (epoch ms) | Latenz-Messung; Host antwortet mit `pong` |
-| `command` | `command: TransportCommand` | Transport-Steuerung (siehe unten) |
-| `refreshLocators` | – | Bridge soll Cue Points neu aus Live lesen |
-
-`TransportCommand` (M0-Prototyp, wird in M2 erweitert):
-
-| `action` | Parameter | Wirkung |
-|---|---|---|
-| `play` | – | Ableton „Play" (vom Songanfang der aktuellen Position) |
-| `stop` | – | Ableton „Stop" |
-| `continue` | – | Ableton „Continue" (weiter ab Pause-Position) |
-| `jumpToLocator` | `locatorIndex` | Springt auf einen Cue Point (Index in der Cue-Point-Liste) |
+| `hello` | `role?`, `deviceName?` | Selbstauskunft nach Connect |
+| `ping` | `id`, `sentAt` | Latenz-Messung; Host antwortet mit `pong` |
+| `command` | `command: TransportCommand` | Play / Stop / Continue / `jumpToLocator` |
+| `refreshLocators` | – | Cue Points neu aus Live lesen |
+| `queue` | `songId`, `entryId?`, `sectionId?` | Song/Section cuen; bei stehendem Transport sofortiger Sprung |
+| `clearQueue` | – | Queue verwerfen |
+| `jumpNow` | – | Gequeueten Sprung sofort ausführen (Safe Mode blockiert bei Playback) |
+| `nextSong` / `prevSong` | – | Nächsten/vorherigen Setlist-Eintrag cuen |
+| `setJumpMode` | `mode: JumpMode` | quantized / endOfSection / endOfSong / dynamic / manual |
+| `setSafeMode` | `enabled` | Safe Mode an/aus |
+| `setPreRoll` | `bars` | Pre-Roll (Count-in) für Section-Sprünge, 0–8 Takte |
+| `setHidePlayed` | `enabled` | Gespielte Songs ausblenden |
+| `markPlayed` | `entryId`, `played` | Eintrag abhaken |
+| `loopSection` | `songId`, `sectionId`, `enabled` | Ableton-Loop-Bracket um die Section |
+| `setlistUpdate` | `setlist: Setlist` | Komplette Setlist ersetzen (Reorder, Overrides, Sets) |
+| `setlistCreate` | `name`, `copyFromId?` | Neue Setlist (optional als Kopie) |
+| `setlistDelete` | `setlistId` | Setlist löschen (`default` nicht löschbar) |
+| `setlistActivate` | `setlistId` | Aktive Setlist wechseln |
+| `setlistImportText` | `name`, `text` | Plaintext-Import (eine Zeile = ein Song, `# Set` als Trenner) |
+| `mixerRefresh` | – | Tracks neu aus Live lesen |
+| `mixerSet` | `trackIndex`, `field`, `value` | `volume` (0..1) / `mute` / `solo` |
+| `clockRulesUpdate` | `rules: ClockRule[]` | Uhrzeit-Aktionen ersetzen |
 
 ### Host → Client
 
 | `type` | Payload | Wann |
 |---|---|---|
 | `snapshot` | `state: HostState` | direkt nach Connect/Reconnect |
-| `transport` | `transport: TransportState` | bei jeder Transport-Änderung (Position ~10 Hz bei laufendem Playback) |
-| `songs` | `songs: Song[]`, `setlist: Setlist` | wenn Locators neu gelesen/geparst wurden |
-| `bridge` | `bridge: BridgeStatus` | Verbindungsstatus zur Ableton-Bridge geändert |
+| `transport` | `transport` | bei jeder Transport-Änderung (~10 Hz bei Playback) |
+| `songs` | `songs` | Locators neu geparst |
+| `setlists` | `setlists`, `activeSetlistId` | Setlist-Änderungen |
+| `engine` | `engine: EngineState` | Queue/Jump-Modus/Safe-Mode/Played geändert |
+| `tracks` | `tracks: TrackInfo[]` | Mixer-Zustand gelesen |
+| `clockRules` | `rules` | Clock-Regeln geändert |
+| `bridge` | `bridge` | Verbindungsstatus zur Ableton-Bridge |
 | `pong` | `id`, `sentAt`, `serverTime` | Antwort auf `ping` |
 
-Alle Typen sind in `packages/shared/src/types.ts` definiert und werden von
-Host und Client gemeinsam importiert.
+### REST (ergänzend)
+
+| Route | Zweck |
+|---|---|
+| `GET /api/health` | Liveness (`{ok, version}`) |
+| `GET /api/state` | Voller Host-State als JSON |
+| `GET /api/info` | LAN-URLs des Hosts (QR-Code-Quelle) |
+| `GET /api/setlist/export.txt` | Plaintext-Export der aktiven Setlist |
 
 ---
 
@@ -68,27 +88,51 @@ quelloffenen MIDI-Remote-Script für Live 11/12. Installation siehe README.
 |---|---|---|
 | `/live/test` | → / ← | Handshake + Heartbeat (alle 2 s; 5 s Timeout ⇒ „getrennt") |
 | `/live/application/get/version` | → / ← | Live-Version für Statusanzeige |
-| `/live/song/get/tempo` | → / ← | Tempo (BPM, float) |
+| `/live/song/get/tempo` | → / ← | Tempo (BPM) |
 | `/live/song/get/is_playing` | → / ← | Transport läuft? |
-| `/live/song/get/current_song_time` | → / ← | Position in Beats (Vierteln); Polling ~10 Hz bei Playback |
+| `/live/song/get/current_song_time` | → / ← | Position in Beats; Polling ~10 Hz bei Playback |
+| `/live/song/set/current_song_time` | → | Position setzen (Basis aller Setlist-Jumps) |
 | `/live/song/get/song_length` | → / ← | Arrangement-Länge in Beats |
-| `/live/song/get/cue_points` | → / ← | Locator-Liste als abwechselnd `name` (string), `time` (float) |
-| `/live/song/get/signature_numerator` | → / ← | Taktart-Zähler |
-| `/live/song/get/signature_denominator` | → / ← | Taktart-Nenner |
-| `/live/song/start_listen/<prop>` | → | Change-Listener registrieren (`tempo`, `is_playing`, Taktart) |
-| `/live/song/stop_listen/<prop>` | → | Listener abmelden (beim Shutdown) |
-| `/live/song/start_playing` | → | Play |
-| `/live/song/stop_playing` | → | Stop |
-| `/live/song/continue_playing` | → | Continue |
-| `/live/song/cue_point/jump` | → | Sprung auf Cue Point (Argument: Index oder Name) |
+| `/live/song/get/cue_points` | → / ← | Locator-Liste (`name`, `time` alternierend) |
+| `/live/song/get/signature_numerator` / `_denominator` | → / ← | Taktart |
+| `/live/song/get/num_tracks` | → / ← | Track-Anzahl |
+| `/live/song/start_listen/<prop>` / `stop_listen` | → | Change-Listener (`tempo`, `is_playing`, Taktart) |
+| `/live/song/start_playing` / `stop_playing` / `continue_playing` | → | Transport |
+| `/live/song/cue_point/jump` | → | Sprung auf Cue Point |
+| `/live/song/set/loop` / `loop_start` / `loop_length` | → | Loop-Bracket (Section-Loops) |
+| `/live/track/get|set/name·volume·mute·solo` | → / ← | Mixer (Argument: Track-Index) |
 
 **Beat-genaue Quantisierung** ist mit Weg A eine Host-Rechnung aus Tempo +
-Position (Ziel: M2); sample-genaue Jumps liefert später die optionale
-Max-for-Live-Bridge (Weg B) hinter demselben `AbletonBridge`-Interface.
+Position (`packages/shared/src/jump.ts`, unit-getestet); sample-genaue Jumps
+liefert später die optionale Max-for-Live-Bridge (Weg B) hinter demselben
+`AbletonBridge`-Interface.
 
 ---
 
-## 3. Locator-Notation (Cue-Point-Namen → Setlist)
+## 3. OSC-Fernsteuerung des Hosts (OSC-In)
+
+Der Host lauscht selbst auf UDP (Default-Port **9000**, `--osc-remote-port`,
+`0` = deaktiviert). Kompatibel mit TouchOSC, Open Stage Control und dem
+generischen OSC-Modul von **Bitfocus Companion**.
+
+| Adresse | Argument | Aktion |
+|---|---|---|
+| `/unableset/play` | – | Play |
+| `/unableset/stop` | – | Stop |
+| `/unableset/continue` | – | Continue |
+| `/unableset/next` | – | nächsten Setlist-Eintrag cuen |
+| `/unableset/prev` | – | vorherigen Setlist-Eintrag cuen |
+| `/unableset/jump` | – | gequeueten Sprung sofort ausführen |
+| `/unableset/queue` | int: Eintrags-Index (0-basiert) | Song aus der aktiven Setlist cuen |
+| `/unableset/safemode` | int: 0/1 | Safe Mode setzen |
+
+**MIDI-Fernsteuerung:** Mapping-Datei `<data-dir>/midi-map.json` (Note/CC/
+Program-Change → Aktion); Hardware-Anbindung optional via `@julusian/midi`
+(siehe `packages/server/src/midiMapping.ts`).
+
+---
+
+## 4. Locator-Notation (Cue-Point-Namen → Setlist)
 
 Der Parser (`packages/bridge/src/locatorParser.ts`) versteht:
 
@@ -96,11 +140,14 @@ Der Parser (`packages/bridge/src/locatorParser.ts`) versteht:
 |---|---|
 | `Songtitel` | startet einen Song an der Locator-Position |
 | `Songtitel {Beschreibung}` | Beschreibung (in der Setlist sichtbar, nicht Teil des Titels) |
+| `>Section-Name` | Section innerhalb des laufenden Songs (z. B. `>Chorus`) |
 | `*Irgendwas` | Locator wird komplett ignoriert (kein Song, kein Marker) |
 | `SONG END` | beendet den laufenden Song; bis zum nächsten Locator ist „kein Song" |
 | `STOP` | wie `SONG END`, zusätzlich `stopAfter` für den beendeten Song |
 | `+STOP` (Token im Songnamen) | Playback soll am Songende anhalten |
-| `+KEY` / `+KEY:VALUE` | generische Flags (z. B. `+LOOP:4`, `+SECTIONS`) — geparst, Auswertung folgt in späteren Meilensteinen |
+| `+LOOP:4` (Token an einer Section) | Section als loop-bar markieren (Anzahl optional) |
+| `+KEY` / `+KEY:VALUE` | generische Flags — geparst, weitere Auswertung folgt |
 
 Groß-/Kleinschreibung ist bei Markern und Flags egal. Ein Song endet am
-nächsten Marker/Locator, der letzte Song an der Arrangement-Länge.
+nächsten Song-/Marker-Locator (Sections zählen nicht), der letzte Song an der
+Arrangement-Länge.
