@@ -3,6 +3,7 @@ export { OscAbletonBridge, type OscAbletonBridgeOptions } from './OscAbletonBrid
 export { parseLocatorName, type LocatorKind, type ParsedLocator } from './locatorParser.js';
 export { buildSongsFromCuePoints, songIdFor } from './songBuilder.js';
 export { MirrorBridge, type MirrorBridgeOptions, type MirrorTarget } from './MirrorBridge.js';
+export { toTypedOscArgs } from './oscArgs.js';
 export {
   AbletonOscSimulator,
   bigSimulatorOptions,

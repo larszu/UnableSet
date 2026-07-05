@@ -1,6 +1,7 @@
 import { useAppStore, type ViewTab } from './store.js';
 import { useShortcuts } from './hooks/useShortcuts.js';
 import { useWakeLock } from './hooks/useWakeLock.js';
+import { StatusBadge } from './components/ui.js';
 import { PerformanceView } from './views/PerformanceView.js';
 import { SetlistView } from './views/SetlistView.js';
 import { LyricsView } from './views/LyricsView.js';
@@ -14,31 +15,6 @@ const TABS: { id: ViewTab; label: string }[] = [
   { id: 'mixer', label: 'Mixer' },
   { id: 'settings', label: 'Settings' },
 ];
-
-function StatusBadge({
-  label,
-  ok,
-  detail,
-}: {
-  label: string;
-  ok: boolean;
-  detail?: string | undefined;
-}) {
-  return (
-    <div
-      className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs sm:text-sm ${
-        ok ? 'border-stage-ok/40 text-stage-ok' : 'border-stage-danger/40 text-stage-danger'
-      }`}
-    >
-      <span
-        className={`h-2.5 w-2.5 rounded-full ${ok ? 'bg-stage-ok' : 'bg-stage-danger'}`}
-        aria-hidden
-      />
-      <span className="font-medium">{label}</span>
-      {detail ? <span className="hidden text-stage-muted sm:inline">{detail}</span> : null}
-    </div>
-  );
-}
 
 export default function App() {
   const connection = useAppStore((s) => s.connection);

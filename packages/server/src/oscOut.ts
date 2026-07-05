@@ -5,22 +5,13 @@
  */
 
 import osc from 'osc';
-import type { OscTypedArg, UDPPort } from 'osc';
+import type { UDPPort } from 'osc';
+import { toTypedOscArgs } from '@unableset/bridge';
 import type { OscMessage } from '@unableset/shared';
 
 export interface OscOutTarget {
   address: string;
   port: number;
-}
-
-function toTypedArgs(args: OscMessage['args']): OscTypedArg[] {
-  return (args ?? []).map((value) => {
-    if (typeof value === 'number') {
-      return Number.isInteger(value) ? { type: 'i', value } : { type: 'f', value };
-    }
-    if (typeof value === 'boolean') return { type: 'i', value: value ? 1 : 0 };
-    return { type: 's', value };
-  });
 }
 
 export class OscOut {
@@ -58,7 +49,7 @@ export class OscOut {
 
   send(message: OscMessage): void {
     if (!this.port || !this.ready) return;
-    const args = toTypedArgs(message.args);
+    const args = toTypedOscArgs(message.args);
     for (const target of this.targets) {
       try {
         this.port.send({ address: message.address, args }, target.address, target.port);

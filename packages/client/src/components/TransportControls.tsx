@@ -5,40 +5,7 @@
 
 import { useAppStore, selectSongById } from '../store.js';
 import { send } from '../ws.js';
-
-function Button({
-  label,
-  onClick,
-  accent = false,
-  warn = false,
-  disabled = false,
-  testId,
-}: {
-  label: string;
-  onClick: () => void;
-  accent?: boolean;
-  warn?: boolean;
-  disabled?: boolean;
-  testId?: string | undefined;
-}) {
-  return (
-    <button
-      type="button"
-      data-testid={testId}
-      onClick={onClick}
-      disabled={disabled}
-      className={`min-h-14 min-w-16 rounded-xl border px-4 text-base font-semibold transition-colors active:scale-[0.98] disabled:opacity-40 ${
-        accent
-          ? 'border-stage-accent bg-stage-accent/15 text-stage-accent hover:bg-stage-accent/25'
-          : warn
-            ? 'border-stage-warn bg-stage-warn/15 text-stage-warn hover:bg-stage-warn/25'
-            : 'border-stage-border bg-stage-surface-2 text-stage-text hover:bg-stage-border/40'
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
+import { Button } from './ui.js';
 
 export function TransportControls() {
   const transport = useAppStore((s) => s.transport);
@@ -60,21 +27,34 @@ export function TransportControls() {
         <Button
           testId="btn-play"
           label={transport.isPlaying ? '❚❚ Läuft' : '▶ Play'}
-          accent
+          ariaLabel="Play"
+          variant="accent"
           onClick={() => send({ type: 'command', command: { action: 'play' } })}
         />
         <Button
           testId="btn-stop"
           label="■ Stop"
+          ariaLabel="Stop"
           onClick={() => send({ type: 'command', command: { action: 'stop' } })}
         />
         <Button
           label="▶ Continue"
+          ariaLabel="Continue"
           onClick={() => send({ type: 'command', command: { action: 'continue' } })}
         />
-        <div className="mx-1 h-10 w-px bg-stage-border" />
-        <Button testId="btn-prev" label="⟨ Prev" onClick={() => send({ type: 'prevSong' })} />
-        <Button testId="btn-next" label="Next ⟩" onClick={() => send({ type: 'nextSong' })} />
+        <div className="mx-1 h-10 w-px bg-stage-border" aria-hidden />
+        <Button
+          testId="btn-prev"
+          label="⟨ Prev"
+          ariaLabel="Vorheriger Song"
+          onClick={() => send({ type: 'prevSong' })}
+        />
+        <Button
+          testId="btn-next"
+          label="Next ⟩"
+          ariaLabel="Nächster Song"
+          onClick={() => send({ type: 'nextSong' })}
+        />
         {engine.safeMode ? (
           <span className="ml-auto rounded-full bg-stage-warn/15 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-stage-warn">
             Safe Mode
@@ -85,6 +65,8 @@ export function TransportControls() {
       {engine.queued ? (
         <div
           data-testid="queue-banner"
+          role="status"
+          aria-live="polite"
           className="flex flex-wrap items-center gap-3 rounded-xl border border-stage-warn/50 bg-stage-warn/10 px-4 py-3"
         >
           <span className="text-sm">
@@ -96,8 +78,14 @@ export function TransportControls() {
             </span>
           </span>
           <div className="ml-auto flex gap-2">
-            <Button testId="btn-jump-now" label="⤳ Jetzt" warn onClick={() => send({ type: 'jumpNow' })} />
-            <Button label="✕" onClick={() => send({ type: 'clearQueue' })} />
+            <Button
+              testId="btn-jump-now"
+              label="⤳ Jetzt"
+              ariaLabel="Jetzt springen"
+              variant="warn"
+              onClick={() => send({ type: 'jumpNow' })}
+            />
+            <Button label="✕" ariaLabel="Queue verwerfen" onClick={() => send({ type: 'clearQueue' })} />
           </div>
         </div>
       ) : null}

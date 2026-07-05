@@ -16,6 +16,7 @@ import {
 import { send } from '../ws.js';
 import { formatBeatsAsDuration } from '../format.js';
 import { TransportControls } from '../components/TransportControls.js';
+import { IconButton, LabeledTextarea, ToggleChip } from '../components/ui.js';
 
 const COLOR_PALETTE = ['#f87171', '#fbbf24', '#34d399', '#38bdf8', '#a78bfa', '#f472b6'];
 
@@ -378,9 +379,24 @@ function EntryRow({
         </span>
         {!locked ? (
           <div className="flex items-center gap-1">
-            <IconButton label="↑" onClick={() => onMove(index, index - 1)} testId={`entry-up-${index}`} />
-            <IconButton label="↓" onClick={() => onMove(index, index + 1)} testId={`entry-down-${index}`} />
-            <IconButton label={expanded ? '▾' : '✎'} onClick={onToggleExpand} testId={`entry-edit-${index}`} />
+            <IconButton
+              label="↑"
+              ariaLabel="Nach oben verschieben"
+              onClick={() => onMove(index, index - 1)}
+              testId={`entry-up-${index}`}
+            />
+            <IconButton
+              label="↓"
+              ariaLabel="Nach unten verschieben"
+              onClick={() => onMove(index, index + 1)}
+              testId={`entry-down-${index}`}
+            />
+            <IconButton
+              label={expanded ? '▾' : '✎'}
+              ariaLabel={expanded ? 'Editor schließen' : 'Eintrag bearbeiten'}
+              onClick={onToggleExpand}
+              testId={`entry-edit-${index}`}
+            />
           </div>
         ) : null}
       </div>
@@ -407,15 +423,11 @@ function EntryRow({
               keine
             </button>
           </div>
-          <label className="block text-sm">
-            <span className="text-xs uppercase tracking-wider text-stage-muted">Notizen</span>
-            <textarea
-              defaultValue={song.notes ?? ''}
-              onBlur={(event) => patchOverrides({ notes: event.target.value })}
-              className="mt-1 w-full rounded-lg border border-stage-border bg-stage-surface-2 p-2 text-sm"
-              rows={2}
-            />
-          </label>
+          <LabeledTextarea
+            label="Notizen"
+            defaultValue={song.notes ?? ''}
+            onCommit={(value) => patchOverrides({ notes: value })}
+          />
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block text-sm">
               <span className="text-xs uppercase tracking-wider text-stage-muted">
@@ -456,17 +468,12 @@ function EntryRow({
               />
             </label>
           </div>
-          <label className="block text-sm">
-            <span className="text-xs uppercase tracking-wider text-stage-muted">
-              OSC bei Songstart (eine Zeile = eine Nachricht, z. B. „/light/preset 3 warm")
-            </span>
-            <textarea
-              defaultValue={oscMessagesToText(song.oscOnEnter ?? [])}
-              onBlur={(event) => patchOverrides({ oscOnEnter: parseOscLines(event.target.value) })}
-              className="mt-1 w-full rounded-lg border border-stage-border bg-stage-surface-2 p-2 font-mono text-sm"
-              rows={2}
-            />
-          </label>
+          <LabeledTextarea
+            label={'OSC bei Songstart (eine Zeile = eine Nachricht, z. B. "/light/preset 3 warm")'}
+            defaultValue={oscMessagesToText(song.oscOnEnter ?? [])}
+            onCommit={(value) => patchOverrides({ oscOnEnter: parseOscLines(value) })}
+            mono
+          />
           <div className="flex flex-wrap gap-2">
             <ToggleChip
               label="Überspringen"
@@ -491,35 +498,6 @@ function EntryRow({
         </div>
       ) : null}
     </div>
-  );
-}
-
-function IconButton({ label, onClick, testId }: { label: string; onClick: () => void; testId?: string }) {
-  return (
-    <button
-      type="button"
-      data-testid={testId}
-      onClick={onClick}
-      className="h-10 w-10 rounded-lg border border-stage-border bg-stage-surface-2 text-sm hover:bg-stage-border/40"
-    >
-      {label}
-    </button>
-  );
-}
-
-function ToggleChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`min-h-10 rounded-full border px-4 text-sm font-medium ${
-        active
-          ? 'border-stage-accent bg-stage-accent/15 text-stage-accent'
-          : 'border-stage-border bg-stage-surface-2 text-stage-muted'
-      }`}
-    >
-      {label}
-    </button>
   );
 }
 

@@ -8,6 +8,7 @@ import QRCode from 'qrcode';
 import { JUMP_MODES, type ClockRule, type JumpMode } from '@unableset/shared';
 import { useAppStore } from '../store.js';
 import { send } from '../ws.js';
+import { Card, Toggle } from '../components/ui.js';
 
 const JUMP_MODE_LABELS: Record<JumpMode, string> = {
   quantized: 'Quantisiert (nächste Taktgrenze)',
@@ -149,43 +150,6 @@ function MirrorsCard() {
         automatisch korrigiert und stoppt, sobald die Rigs in Sync sind.
       </p>
     </Card>
-  );
-}
-
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="space-y-4 rounded-2xl border border-stage-border bg-stage-surface p-5">
-      <h2 className="text-lg font-bold">{title}</h2>
-      {children}
-    </section>
-  );
-}
-
-function Toggle({
-  label,
-  checked,
-  onChange,
-  disabled = false,
-  testId,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-  disabled?: boolean;
-  testId?: string | undefined;
-}) {
-  return (
-    <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm">
-      <input
-        type="checkbox"
-        data-testid={testId}
-        checked={checked}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.checked)}
-        className="h-5 w-5 accent-(--color-stage-accent)"
-      />
-      {label}
-    </label>
   );
 }
 

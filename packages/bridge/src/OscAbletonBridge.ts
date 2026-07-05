@@ -11,7 +11,7 @@
 
 import { EventEmitter } from 'node:events';
 import osc from 'osc';
-import type { OscPacket, OscTypedArg, UDPPort } from 'osc';
+import type { OscPacket, UDPPort } from 'osc';
 import {
   ABLETON_OSC_DEFAULT_RECEIVE_PORT,
   ABLETON_OSC_DEFAULT_SEND_PORT,
@@ -24,6 +24,7 @@ import {
   type TrackInfo,
 } from '@unableset/shared';
 import type { AbletonBridge, AbletonBridgeEvents, BridgeTransport } from './AbletonBridge.js';
+import { toTypedOscArgs } from './oscArgs.js';
 
 export interface OscAbletonBridgeOptions {
   /** Adresse des Rechners, auf dem Live läuft. */
@@ -46,16 +47,6 @@ export interface OscAbletonBridgeOptions {
 interface PendingRequest {
   resolve: (args: unknown[]) => void;
   timer: NodeJS.Timeout;
-}
-
-function toTypedArgs(args: (number | string)[]): OscTypedArg[] {
-  return args.map((value) =>
-    typeof value === 'string'
-      ? { type: 's', value }
-      : Number.isInteger(value)
-        ? { type: 'i', value }
-        : { type: 'f', value },
-  );
 }
 
 function argValues(packet: OscPacket): unknown[] {
@@ -368,7 +359,7 @@ export class OscAbletonBridge extends EventEmitter<AbletonBridgeEvents> implemen
   private send(address: string, args: (number | string)[] = []): void {
     if (!this.port || !this.portReady) return;
     try {
-      this.port.send({ address, args: toTypedArgs(args) });
+      this.port.send({ address, args: toTypedOscArgs(args) });
     } catch (error) {
       this.emit('bridgeError', error instanceof Error ? error : new Error(String(error)));
     }
