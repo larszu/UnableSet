@@ -16,7 +16,28 @@ const path = require('node:path');
 
 const HTTP_PORT = Number(process.env.UNABLESET_PORT ?? 4400);
 const URL = `http://localhost:${HTTP_PORT}`;
-const SERVER_ENTRY = path.join(__dirname, '..', '..', 'packages', 'server', 'dist', 'index.js');
+
+const fs = require('node:fs');
+
+/**
+ * Server-Entry finden: im Release liegt das gebündelte server.cjs unter
+ * resources/server/, in der Entwicklung das normale dist/index.js.
+ */
+function resolveServer() {
+  const packaged = path.join(process.resourcesPath ?? '', 'server', 'server.cjs');
+  if (process.resourcesPath && fs.existsSync(packaged)) {
+    return {
+      entry: packaged,
+      clientDist: path.join(process.resourcesPath, 'client', 'dist'),
+    };
+  }
+  return {
+    entry: path.join(__dirname, '..', '..', 'packages', 'server', 'dist', 'index.js'),
+    clientDist: path.join(__dirname, '..', '..', 'packages', 'client', 'dist'),
+  };
+}
+
+const SERVER = resolveServer();
 
 let serverProcess = null;
 let mainWindow = null;
@@ -25,8 +46,9 @@ let tray = null;
 let quitting = false;
 
 function startServer() {
-  serverProcess = fork(SERVER_ENTRY, ['--http-port', String(HTTP_PORT)], {
+  serverProcess = fork(SERVER.entry, ['--http-port', String(HTTP_PORT)], {
     stdio: 'inherit',
+    env: { ...process.env, UNABLESET_CLIENT_DIST: SERVER.clientDist },
   });
   serverProcess.on('exit', (code) => {
     serverProcess = null;
