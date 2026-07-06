@@ -1,35 +1,20 @@
 /**
- * MIDI-Mapping für Hardware-Controller (Fußschalter etc.).
+ * MIDI-Mapping für Hardware-Controller (Fußschalter etc.) mit Learn-Modus.
  *
  * Der Matcher ist eine reine, getestete Funktion. Die Hardware-Anbindung
  * lädt `@julusian/midi` dynamisch: Ist das Modul nicht installiert (z. B.
- * Headless-CI ohne ALSA), bleibt MIDI einfach deaktiviert — der Host läuft
- * unverändert weiter. Aktivieren: `pnpm --filter @unableset/server add @julusian/midi`.
+ * Headless-CI ohne ALSA), bleibt MIDI deaktiviert — Mappings sind trotzdem
+ * sichtbar/editierbar. Aktivieren: `pnpm --filter @unableset/server add @julusian/midi`.
  *
- * Konfiguration: <data-dir>/midi-map.json, z. B.
- * { "input": "MC6", "mappings": [
- *   { "event": "noteOn", "channel": 0, "data1": 60, "action": "play" } ] }
+ * Konfiguration: <data-dir>/midi-map.json
  */
 
 import { join } from 'node:path';
-import { readJsonWithBackup } from './util/atomicWrite.js';
+import type { MidiMappingInfo, MidiState, RemoteActionName } from '@unableset/shared';
+import { atomicWriteJson, readJsonWithBackup } from './util/atomicWrite.js';
 
-export type RemoteAction =
-  | 'play'
-  | 'stop'
-  | 'continue'
-  | 'nextSong'
-  | 'prevSong'
-  | 'jumpNow';
-
-export interface MidiMappingEntry {
-  event: 'noteOn' | 'cc' | 'programChange';
-  channel: number;
-  data1: number;
-  /** Bei cc: nur auslösen, wenn der Wert ≥ Schwelle ist (Default 64). */
-  threshold?: number;
-  action: RemoteAction;
-}
+export type RemoteAction = RemoteActionName;
+export type MidiMappingEntry = MidiMappingInfo;
 
 export interface MidiConfig {
   /** Substring des Input-Port-Namens; ohne Angabe: erster Port. */
@@ -68,68 +53,153 @@ export function matchMidiMapping(
   return null;
 }
 
-export async function loadMidiConfig(dataDir: string): Promise<MidiConfig | null> {
-  const config = await readJsonWithBackup<MidiConfig>(join(dataDir, 'midi-map.json'));
-  if (!config || !Array.isArray(config.mappings)) return null;
-  return config;
+/** Event → Mapping-Vorlage (für den Learn-Modus). */
+export function mappingFromEvent(
+  event: RawMidiEvent,
+  action: RemoteAction,
+): MidiMappingEntry | null {
+  const type = event.status & 0xf0;
+  const channel = event.status & 0x0f;
+  if (type === 0x90 && event.data2 > 0) {
+    return { event: 'noteOn', channel, data1: event.data1, action };
+  }
+  if (type === 0xb0) {
+    return { event: 'cc', channel, data1: event.data1, action };
+  }
+  if (type === 0xc0) {
+    return { event: 'programChange', channel, data1: event.data1, action };
+  }
+  return null; // noteOff/Aftertouch etc. sind keine sinnvollen Trigger
+}
+
+interface MidiInputLike {
+  getPortCount(): number;
+  getPortName(index: number): string;
+  openPort(index: number): void;
+  closePort(): void;
+  on(event: 'message', cb: (delta: number, message: number[]) => void): void;
 }
 
 /**
- * Startet die MIDI-Hardware-Anbindung, wenn Modul + Konfiguration vorhanden
- * sind. Gibt eine Stop-Funktion zurück (no-op wenn deaktiviert).
+ * Verwaltet Mappings, Learn-Modus und (optional) die Hardware-Anbindung.
+ * Broadcastet Zustandsänderungen über den onState-Callback.
  */
-export async function startMidiInput(
-  dataDir: string,
-  onAction: (action: RemoteAction) => void,
-  log: (message: string) => void,
-): Promise<() => void> {
-  const config = await loadMidiConfig(dataDir);
-  if (!config || config.mappings.length === 0) {
-    return () => {};
+export class MidiManager {
+  private state: MidiState = { available: false, mappings: [] };
+  private config: MidiConfig = { mappings: [] };
+  private input: MidiInputLike | null = null;
+
+  constructor(
+    private readonly dataDir: string,
+    private readonly onAction: (action: RemoteAction) => void,
+    private readonly onState: (state: MidiState) => void,
+    private readonly log: (message: string) => void = () => {},
+  ) {}
+
+  getState(): MidiState {
+    return { ...this.state, mappings: [...this.state.mappings] };
   }
 
-  let midiModule: unknown;
-  try {
-    midiModule = await import('@julusian/midi' as string);
-  } catch {
-    log('MIDI-Mapping konfiguriert, aber @julusian/midi ist nicht installiert — MIDI deaktiviert');
-    return () => {};
+  private emitState(): void {
+    this.state.mappings = this.config.mappings;
+    this.onState(this.getState());
   }
 
-  try {
-    const { Input } = midiModule as {
-      Input: new () => {
-        getPortCount(): number;
-        getPortName(index: number): string;
-        openPort(index: number): void;
-        closePort(): void;
-        on(event: 'message', cb: (delta: number, message: number[]) => void): void;
-      };
-    };
-    const input = new Input();
-    const count = input.getPortCount();
-    let portIndex = -1;
-    for (let i = 0; i < count; i++) {
-      const name = input.getPortName(i);
-      if (!config.input || name.toLowerCase().includes(config.input.toLowerCase())) {
-        portIndex = i;
-        break;
+  async start(): Promise<void> {
+    const config = await readJsonWithBackup<MidiConfig>(join(this.dataDir, 'midi-map.json'));
+    if (config && Array.isArray(config.mappings)) this.config = config;
+
+    let midiModule: unknown;
+    try {
+      midiModule = await import('@julusian/midi' as string);
+    } catch {
+      this.log('MIDI: @julusian/midi nicht installiert — Hardware deaktiviert, Mappings editierbar');
+      this.emitState();
+      return;
+    }
+
+    try {
+      const { Input } = midiModule as { Input: new () => MidiInputLike };
+      const input = new Input();
+      const count = input.getPortCount();
+      let portIndex = -1;
+      for (let i = 0; i < count; i++) {
+        const name = input.getPortName(i);
+        if (!this.config.input || name.toLowerCase().includes(this.config.input.toLowerCase())) {
+          portIndex = i;
+          break;
+        }
       }
+      if (portIndex < 0) {
+        this.log(`MIDI: kein passender Input gefunden (${count} Ports)`);
+        this.emitState();
+        return;
+      }
+      input.on('message', (_delta, message) => {
+        const [status = 0, data1 = 0, data2 = 0] = message;
+        this.handleEvent({ status, data1, data2 });
+      });
+      input.openPort(portIndex);
+      this.input = input;
+      this.state.available = true;
+      this.state.inputName = input.getPortName(portIndex);
+      this.log(`MIDI-Input aktiv: ${this.state.inputName}`);
+    } catch (error) {
+      this.log(`MIDI-Start fehlgeschlagen: ${error instanceof Error ? error.message : String(error)}`);
     }
-    if (portIndex < 0) {
-      log(`Kein passender MIDI-Input gefunden (${count} Ports)`);
-      return () => {};
+    this.emitState();
+  }
+
+  stop(): void {
+    try {
+      this.input?.closePort();
+    } catch {
+      // Shutdown — egal
     }
-    input.on('message', (_delta, message) => {
-      const [status = 0, data1 = 0, data2 = 0] = message;
-      const action = matchMidiMapping(config.mappings, { status, data1, data2 });
-      if (action) onAction(action);
-    });
-    input.openPort(portIndex);
-    log(`MIDI-Input aktiv: ${input.getPortName(portIndex)}`);
-    return () => input.closePort();
-  } catch (error) {
-    log(`MIDI-Start fehlgeschlagen: ${error instanceof Error ? error.message : String(error)}`);
-    return () => {};
+    this.input = null;
+  }
+
+  /** Auch von Tests/Simulationen aufrufbar (ohne Hardware). */
+  handleEvent(event: RawMidiEvent): void {
+    this.state.lastEvent = event;
+    if (this.state.learning) {
+      const mapping = mappingFromEvent(event, this.state.learning);
+      if (mapping) {
+        // Bestehendes Mapping für dieselbe Aktion ersetzen
+        this.config.mappings = [
+          ...this.config.mappings.filter((candidate) => candidate.action !== mapping.action),
+          mapping,
+        ];
+        delete this.state.learning;
+        this.save();
+        this.log(`MIDI gelernt: ${mapping.event} ch${mapping.channel} ${mapping.data1} → ${mapping.action}`);
+      }
+      this.emitState();
+      return;
+    }
+    const action = matchMidiMapping(this.config.mappings, event);
+    if (action) this.onAction(action);
+  }
+
+  learn(action: RemoteAction): void {
+    this.state.learning = action;
+    this.emitState();
+  }
+
+  cancelLearn(): void {
+    delete this.state.learning;
+    this.emitState();
+  }
+
+  deleteMapping(index: number): void {
+    this.config.mappings = this.config.mappings.filter((_, i) => i !== index);
+    this.save();
+    this.emitState();
+  }
+
+  private save(): void {
+    void atomicWriteJson(join(this.dataDir, 'midi-map.json'), this.config).catch(
+      (error: Error) => this.log(`MIDI-Konfig speichern fehlgeschlagen: ${error.message}`),
+    );
   }
 }

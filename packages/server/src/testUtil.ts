@@ -40,6 +40,14 @@ export class FakeBridge extends EventEmitter<AbletonBridgeEvents> implements Abl
     return this.cuePoints;
   }
 
+  lyricLines: CuePoint[] = [];
+
+  async refreshLyricLines(): Promise<CuePoint[]> {
+    this.actions.push('refreshLyricLines');
+    this.emit('lyricLines', this.lyricLines);
+    return this.lyricLines;
+  }
+
   play(): void {
     this.actions.push('play');
     this.transport.isPlaying = true;

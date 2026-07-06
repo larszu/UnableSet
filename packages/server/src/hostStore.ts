@@ -7,6 +7,7 @@
 import { EventEmitter } from 'node:events';
 import {
   INITIAL_ENGINE,
+  INITIAL_MIDI,
   INITIAL_TRANSPORT,
   beatsToBarBeat,
   findSongAtBeat,
@@ -15,7 +16,9 @@ import {
   type ClockRule,
   type EngineState,
   type HostState,
+  type MidiState,
   type MirrorTargetStatus,
+  type ProjectFileInfo,
   type ServerMessage,
   type Setlist,
   type Song,
@@ -39,6 +42,9 @@ export class HostStore extends EventEmitter<HostStoreEvents> {
   private tracks: TrackInfo[] = [];
   private clockRules: ClockRule[] = [];
   private mirrors: MirrorTargetStatus[] = [];
+  private midi: MidiState = { ...INITIAL_MIDI };
+  private projects: ProjectFileInfo[] = [];
+  private shared: Record<string, string | number | boolean> = {};
 
   constructor(serverVersion: string, initialBridge: BridgeStatus) {
     super();
@@ -58,6 +64,9 @@ export class HostStore extends EventEmitter<HostStoreEvents> {
       tracks: this.tracks,
       clockRules: this.clockRules,
       mirrors: this.mirrors,
+      midi: this.midi,
+      projects: this.projects,
+      shared: this.shared,
     };
   }
 
@@ -172,6 +181,25 @@ export class HostStore extends EventEmitter<HostStoreEvents> {
   setMirrors(mirrors: MirrorTargetStatus[]): void {
     this.mirrors = mirrors;
     this.emit('broadcast', { type: 'mirrors', mirrors });
+  }
+
+  setMidi(midi: MidiState): void {
+    this.midi = midi;
+    this.emit('broadcast', { type: 'midi', midi });
+  }
+
+  setProjects(projects: ProjectFileInfo[]): void {
+    this.projects = projects;
+    this.emit('broadcast', { type: 'projects', projects });
+  }
+
+  getProjects(): ProjectFileInfo[] {
+    return this.projects;
+  }
+
+  setShared(key: string, value: string | number | boolean): void {
+    this.shared = { ...this.shared, [key]: value };
+    this.emit('broadcast', { type: 'shared', values: this.shared });
   }
 
   /** Aktualisiert Song-/Section-/Queue-Felder im Transport nach State-Änderungen. */

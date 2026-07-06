@@ -15,7 +15,6 @@ import { MirrorBridge, OscAbletonBridge, type AbletonBridge } from '@unableset/b
 import { parseConfig } from './config.js';
 import { createHostApp } from './hostApp.js';
 import { OscRemote } from './oscRemote.js';
-import { startMidiInput } from './midiMapping.js';
 import { startMdns } from './mdns.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -90,7 +89,6 @@ const oscRemote =
       )
     : null;
 
-let stopMidi: () => void = () => {};
 let stopMdns: () => void = () => {};
 
 void app.ready.then(async () => {
@@ -114,33 +112,6 @@ void app.ready.then(async () => {
         .join(', ')}`,
     );
   }
-
-  stopMidi = await startMidiInput(
-    dataDir,
-    (action) => {
-      switch (action) {
-        case 'play':
-          bridge.play();
-          break;
-        case 'stop':
-          bridge.stop();
-          break;
-        case 'continue':
-          bridge.continuePlayback();
-          break;
-        case 'nextSong':
-          app.engine.nextSong(timeSig());
-          break;
-        case 'prevSong':
-          app.engine.prevSong(timeSig());
-          break;
-        case 'jumpNow':
-          app.engine.jumpNow(timeSig());
-          break;
-      }
-    },
-    log,
-  );
 });
 
 bridge.connect().catch((error: Error) => {
@@ -153,7 +124,6 @@ async function shutdown(signal: string): Promise<void> {
   if (shuttingDown) return;
   shuttingDown = true;
   log(`${signal} empfangen — fahre herunter …`);
-  stopMidi();
   stopMdns();
   oscRemote?.close();
   await app.close().catch(() => undefined);

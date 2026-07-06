@@ -5,18 +5,23 @@
 
 import { createServer, type Server } from 'node:http';
 import { networkInterfaces } from 'node:os';
+import { spawn } from 'node:child_process';
+import { join } from 'node:path';
 import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
 import {
   WS_PATH,
   parseClientMessage,
+  parseSongTitlesFromCsv,
   serializeMessage,
   setlistFromText,
   setlistToText,
   type ClientMessage,
   type CuePoint,
+  type ProjectFileInfo,
   type ServerMessage,
   type Setlist,
+  type Song,
 } from '@unableset/shared';
 import { buildSongsFromCuePoints, type AbletonBridge } from '@unableset/bridge';
 import { HostStore } from './hostStore.js';
@@ -25,6 +30,8 @@ import { Persistence } from './persistence.js';
 import { ClockScheduler } from './clockActions.js';
 import { OscOut, type OscOutTarget } from './oscOut.js';
 import { OSC_OUT } from '@unableset/shared';
+import { MidiManager } from './midiMapping.js';
+import { readJsonWithBackup } from './util/atomicWrite.js';
 
 export interface HostAppOptions {
   bridge: AbletonBridge;
@@ -80,9 +87,22 @@ export function createHostApp(options: HostAppOptions): HostApp {
   // --- Bridge → Store/Engine --------------------------------------------------
   let songLengthBeats: number | undefined;
   let lastCuePoints: CuePoint[] = [];
+  let lastLyricLines: CuePoint[] = [];
+
+  /** Lyric-Zeilen (aus MIDI-Clips) den Songs zeitlich zuordnen. */
+  const attachTimedLyrics = (songs: Song[]): Song[] => {
+    if (lastLyricLines.length === 0) return songs;
+    return songs.map((song) => {
+      const end = song.startBeat + song.lengthBeats;
+      const lines = lastLyricLines
+        .filter((line) => line.timeBeats >= song.startBeat && line.timeBeats < end)
+        .map((line) => ({ beat: line.timeBeats, text: line.name }));
+      return lines.length > 0 ? { ...song, timedLyrics: lines } : song;
+    });
+  };
 
   const rebuildSongs = () => {
-    const songs = buildSongsFromCuePoints(lastCuePoints, songLengthBeats);
+    const songs = attachTimedLyrics(buildSongsFromCuePoints(lastCuePoints, songLengthBeats));
     // Engine zuerst — store.setSongs broadcastet sofort und der OSC-Out-Feed
     // löst Songs über engine.resolvedSong auf
     engine.setSongs(songs);
@@ -104,6 +124,10 @@ export function createHostApp(options: HostAppOptions): HostApp {
   bridge.on('cuePoints', (cuePoints) => {
     lastCuePoints = cuePoints;
     rebuildSongs();
+  });
+  bridge.on('lyricLines', (lines) => {
+    lastLyricLines = lines;
+    if (lastCuePoints.length > 0) rebuildSongs();
   });
   bridge.on('songLength', (length) => {
     if (length !== songLengthBeats) {
@@ -196,8 +220,73 @@ export function createHostApp(options: HostAppOptions): HostApp {
   );
   clock.start();
 
+  // --- MIDI (Learn-Modus; Hardware optional) ------------------------------------
+  const remoteAction = (action: string) => {
+    switch (action) {
+      case 'play':
+        bridge.play();
+        break;
+      case 'stop':
+        bridge.stop();
+        break;
+      case 'continue':
+        bridge.continuePlayback();
+        break;
+      case 'nextSong':
+        engine.nextSong(store.getTransport().timeSig);
+        break;
+      case 'prevSong':
+        engine.prevSong(store.getTransport().timeSig);
+        break;
+      case 'jumpNow':
+        engine.jumpNow(store.getTransport().timeSig);
+        break;
+    }
+  };
+  const midi = options.dataDir
+    ? new MidiManager(options.dataDir, remoteAction, (state) => store.setMidi(state), log)
+    : null;
+
+  // --- Multi-File-Projekte (<data-dir>/projects.json) ----------------------------
+  const openProject = (path: string) => {
+    // Nur registrierte Projektdateien (Allowlist) — nie beliebige Pfade öffnen
+    const project = store.getProjects().find((candidate) => candidate.path === path);
+    if (!project) {
+      log(`projectOpen abgelehnt (nicht in projects.json): ${path}`);
+      return;
+    }
+    const [command, args] =
+      process.platform === 'darwin'
+        ? ['open', [project.path]]
+        : process.platform === 'win32'
+          ? ['cmd', ['/c', 'start', '', project.path]]
+          : ['xdg-open', [project.path]];
+    try {
+      const child = spawn(command, args, { detached: true, stdio: 'ignore' });
+      child.on('error', (error) => log(`Projekt öffnen fehlgeschlagen: ${error.message}`));
+      child.unref();
+      log(`Öffne Live-Projekt: ${project.name} (${project.path})`);
+    } catch (error) {
+      log(`Projekt öffnen fehlgeschlagen: ${error instanceof Error ? error.message : error}`);
+    }
+  };
+
   // --- Persistierten Zustand laden ---------------------------------------------
   const ready = (async () => {
+    if (options.dataDir) {
+      const projects = await readJsonWithBackup<ProjectFileInfo[]>(
+        join(options.dataDir, 'projects.json'),
+      );
+      if (Array.isArray(projects)) {
+        store.setProjects(
+          projects.filter(
+            (project) =>
+              typeof project?.name === 'string' && typeof project?.path === 'string',
+          ),
+        );
+      }
+      await midi?.start();
+    }
     if (!persistence) return;
     const [setlists, settings] = await Promise.all([
       persistence.loadSetlists(),
@@ -257,7 +346,51 @@ export function createHostApp(options: HostAppOptions): HostApp {
         bridge.refreshCuePoints().catch((error: Error) => {
           log(`Cue-Point-Refresh fehlgeschlagen: ${error.message}`);
         });
+        bridge.refreshLyricLines().catch(() => undefined);
         break;
+      case 'refreshLyrics':
+        bridge.refreshLyricLines().catch((error: Error) => {
+          log(`Lyrics-Refresh fehlgeschlagen: ${error.message}`);
+        });
+        break;
+
+      // --- MIDI-Learn ---
+      case 'midiLearnStart':
+        midi?.learn(message.action);
+        break;
+      case 'midiLearnCancel':
+        midi?.cancelLearn();
+        break;
+      case 'midiMappingDelete':
+        midi?.deleteMapping(message.index);
+        break;
+
+      // --- Multi-File-Projekte ---
+      case 'projectOpen':
+        openProject(message.path);
+        break;
+
+      // --- Canvas & Scripting ---
+      case 'sendOsc':
+        if (
+          typeof message.message?.address === 'string' &&
+          message.message.address.startsWith('/') &&
+          message.message.address.length <= 200
+        ) {
+          oscOut.send(message.message);
+        }
+        break;
+      case 'sharedSet': {
+        const valueOk =
+          typeof message.value !== 'string' || message.value.length <= 1024;
+        // Schlüsselanzahl deckeln (unbegrenztes Wachstum verhindern)
+        const keyExists = message.key in store.getSnapshot().shared;
+        const underCap = keyExists || Object.keys(store.getSnapshot().shared).length < 256;
+        if (typeof message.key === 'string' && message.key.length <= 64 && valueOk && underCap) {
+          store.setShared(message.key, message.value);
+        }
+        break;
+      }
 
       // --- Queue & Jumps ---
       case 'queue':
@@ -346,8 +479,13 @@ export function createHostApp(options: HostAppOptions): HostApp {
         engine.setActiveSetlist(store.getActiveSetlist());
         persistSetlists();
         break;
-      case 'setlistImportText': {
-        const result = setlistFromText(message.text, store.getSongs());
+      case 'setlistImportText':
+      case 'setlistImportCsv': {
+        const text =
+          message.type === 'setlistImportCsv'
+            ? parseSongTitlesFromCsv(message.csv).join('\n')
+            : message.text;
+        const result = setlistFromText(text, store.getSongs());
         if (result.unmatched.length > 0) {
           log(`Import: ${result.unmatched.length} Zeile(n) ohne Song-Match ignoriert`);
         }
@@ -386,6 +524,30 @@ export function createHostApp(options: HostAppOptions): HostApp {
 
   // --- HTTP ---------------------------------------------------------------------
   const app = express();
+  app.disable('x-powered-by');
+  // Sicherheits-Header (ohne externe Deps). Die CSP erlaubt bewusst blob:
+  // (Canvas-Script-Worker) und data: (QR-Code), aber keine Fremd-Hosts.
+  app.use((_req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+    res.setHeader(
+      'Content-Security-Policy',
+      [
+        "default-src 'self'",
+        "script-src 'self' blob:",
+        "worker-src 'self' blob:",
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data:",
+        "connect-src 'self' ws: wss:",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'self'",
+      ].join('; '),
+    );
+    next();
+  });
   app.get('/api/health', (_req, res) => {
     res.json({ ok: true, version: serverVersion });
   });
@@ -418,7 +580,9 @@ export function createHostApp(options: HostAppOptions): HostApp {
   const httpServer = createServer(app);
 
   // --- WebSocket ------------------------------------------------------------------
-  const wss = new WebSocketServer({ server: httpServer, path: WS_PATH });
+  // maxPayload begrenzt einzelne Frames (Schutz gegen Speicher-Missbrauch);
+  // 256 KB reichen für die größten legitimen Nachrichten (Setlist-Updates).
+  const wss = new WebSocketServer({ server: httpServer, path: WS_PATH, maxPayload: 262_144 });
 
   const broadcast = (message: ServerMessage) => {
     const frame = serializeMessage(message);
@@ -432,7 +596,25 @@ export function createHostApp(options: HostAppOptions): HostApp {
     // Voller Snapshot bei jedem (Re)Connect — Grundprinzip des Protokolls
     socket.send(serializeMessage({ type: 'snapshot', state: store.getSnapshot() }));
 
+    // Grobe Ratenbegrenzung: ein amoklaufender Client (Bug/Angriff) darf den
+    // Host nicht lahmlegen. 400 Nachrichten/Sekunde sind weit über jedem
+    // legitimen Bedarf (10-Hz-Ping + Bedienung).
+    let windowStart = 0;
+    let countInWindow = 0;
+
     socket.on('message', (data) => {
+      // Date.now steht im Server-Kontext zur Verfügung (kein Workflow-Sandbox)
+      const now = Date.now();
+      if (now - windowStart > 1000) {
+        windowStart = now;
+        countInWindow = 0;
+      }
+      countInWindow += 1;
+      if (countInWindow > 400) {
+        if (countInWindow === 401) log('WS-Client überschreitet Ratenlimit — Frames verworfen');
+        return;
+      }
+
       const message = parseClientMessage(
         typeof data === 'string' ? data : new Uint8Array(data as Buffer),
       );
@@ -458,6 +640,7 @@ export function createHostApp(options: HostAppOptions): HostApp {
     ready,
     close: async () => {
       clock.stop();
+      midi?.stop();
       oscOut.close();
       store.off('broadcast', broadcast);
       for (const client of wss.clients) client.terminate();
