@@ -205,6 +205,36 @@ describe('AbleSet-Companion-Kompatibilität (Integration, UDP)', () => {
     expect(companion.value('/global/isPlaying')).toEqual([true]);
   });
 
+  it('/mixer/<track>/mute steuert den Track und meldet muted zurück', async () => {
+    const ablesetPort = await freeUdpPort();
+    const companionPort = await freeUdpPort();
+    const bridge = new FakeBridge();
+    bridge.cuePoints = [{ name: 'Alpha', timeBeats: 0 }];
+    bridge.tracks = [
+      { index: 0, name: 'Click', volume: 0.8, mute: false, solo: false },
+      { index: 1, name: 'Playback', volume: 0.8, mute: false, solo: false },
+    ];
+    app = createHostApp({ bridge, serverVersion: 'test', ablesetPort });
+    await app.ready;
+    bridge.emit('songLength', 64);
+    bridge.emit('cuePoints', bridge.cuePoints);
+    bridge.emit('tracks', bridge.tracks);
+
+    companion = new FakeCompanion(companionPort, ablesetPort);
+    await companion.open();
+    companion.send('/subscribe', [
+      { type: 's', value: 'auto' },
+      { type: 'i', value: companionPort },
+      { type: 's', value: 'Companion' },
+      { type: 'F', value: false },
+    ]);
+    await waitFor(() => companion!.value('/mixer/Click/muted') !== undefined);
+    expect(companion.value('/mixer/Click/muted')).toEqual([false]);
+
+    companion.send('/mixer/Playback/mute', [{ type: 'i', value: 1 }]);
+    await waitFor(() => bridge.actions.includes('mute:1:true'));
+  });
+
   it('/unsubscribe stoppt weitere Updates', async () => {
     const { companion } = await setup();
     await waitFor(() => companion.value('/setlist/songs') !== undefined);

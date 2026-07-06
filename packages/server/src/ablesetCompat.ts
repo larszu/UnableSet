@@ -161,7 +161,9 @@ export class AblesetCompatServer {
     } else if (
       message.type === 'songs' ||
       message.type === 'setlists' ||
-      message.type === 'engine'
+      message.type === 'engine' ||
+      message.type === 'tracks' ||
+      message.type === 'bridge'
     ) {
       this.sendToAll([...this.structureValues(state), ...this.positionValues(state)]);
     }
@@ -258,7 +260,31 @@ export class AblesetCompatServer {
       return;
     }
 
-    // /audioInterfaces/*, /mixer/* : keine 1:1-Entsprechung → still ignorieren
+    // --- Mixer: /mixer/<gruppe>/<typ> → Track per Name ---
+    const mixerMatch = address.match(/^\/mixer\/(.+)\/(mute|muted|solo|soloed|toggleMute|toggleSolo)$/);
+    if (mixerMatch) {
+      this.applyMixer(mixerMatch[1], mixerMatch[2], args[0]);
+      return;
+    }
+
+    // /audioInterfaces/* : keine steuerbare 1:1-Entsprechung → still ignorieren
+  }
+
+  private trackByName(name: string): { index: number; mute: boolean; solo: boolean } | undefined {
+    const wanted = name.toLowerCase();
+    return this.store
+      .getSnapshot()
+      .tracks.find((track) => track.name.toLowerCase() === wanted);
+  }
+
+  private applyMixer(group: string, type: string, value: unknown): void {
+    const track = this.trackByName(group);
+    if (!track) return;
+    const isSolo = type.toLowerCase().includes('solo');
+    const isToggle = type.startsWith('toggle') || value === 'toggle';
+    const target = isToggle ? !(isSolo ? track.solo : track.mute) : value === 1 || value === true;
+    if (isSolo) this.bridge.setTrackSolo(track.index, target);
+    else this.bridge.setTrackMute(track.index, target);
   }
 
   // --- Kommando-Umsetzung -------------------------------------------------------
@@ -397,7 +423,16 @@ export class AblesetCompatServer {
       { address: '/setlist/loopEnabled', args: [B(Boolean(engine.loopSectionId))] },
       { address: '/global/tempo', args: [F(state.transport.bpm)] },
       { address: '/global/timeSignature', args: [I(state.transport.timeSig[0]), I(state.transport.timeSig[1])] },
+      // Redundanz-Interfaces: „verbunden", wenn die Bridge steht
+      { address: '/audioInterfaces/connected', args: [B(state.bridge.connected)] },
+      { address: '/audioInterfaces/all/scene', args: [I(0)] },
     ];
+
+    // Mixer: pro Track muted/soloed unter dem Track-Namen (AbleSet-Gruppen)
+    for (const track of state.tracks) {
+      msgs.push({ address: `/mixer/${track.name}/muted`, args: [B(track.mute)] });
+      msgs.push({ address: `/mixer/${track.name}/soloed`, args: [B(track.solo)] });
+    }
 
     // Loop-Grenzen der aktiven Section
     if (engine.loopSectionId && song) {
@@ -447,10 +482,13 @@ export class AblesetCompatServer {
 
     const msgs: OscMsg[] = [
       { address: '/global/beatsPosition', args: [F(transport.positionBeats)] },
+      { address: '/global/finePosition', args: [F(transport.positionBeats)] },
       { address: '/global/humanPosition', args: [I(bar), I(beat)] },
       { address: '/global/currentMeasure', args: [I(measure), I(bar), I(beat)] },
       { address: '/global/isPlaying', args: [B(transport.isPlaying)] },
       { address: '/global/isRecording', args: [B(transport.isRecording)] },
+      { address: '/global/isSyncingPlayback', args: [B(false)] },
+      { address: '/setlist/isCountingIn', args: [B(false)] },
       { address: '/global/tempo', args: [F(transport.bpm)] },
       {
         address: '/setlist/activeSongName',
