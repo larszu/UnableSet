@@ -5,10 +5,15 @@
 
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
-import { JUMP_MODES, type ClockRule, type JumpMode } from '@unableset/shared';
+import {
+  JUMP_MODES,
+  type ClockRule,
+  type JumpMode,
+  type RemoteActionName,
+} from '@unableset/shared';
 import { useAppStore } from '../store.js';
 import { send } from '../ws.js';
-import { Card, Toggle } from '../components/ui.js';
+import { Button, Card, Toggle } from '../components/ui.js';
 
 const JUMP_MODE_LABELS: Record<JumpMode, string> = {
   quantized: 'Quantisiert (nächste Taktgrenze)',
@@ -92,6 +97,8 @@ export function SettingsView() {
         <ClockRulesEditor rules={clockRules} locked={locked} />
       </Card>
 
+      <MidiCard />
+      <ProjectsCard />
       <MirrorsCard />
 
       <Card title="Verbindung">
@@ -117,6 +124,121 @@ export function SettingsView() {
         </p>
       </Card>
     </div>
+  );
+}
+
+const LEARNABLE_ACTIONS: RemoteActionName[] = [
+  'play',
+  'stop',
+  'continue',
+  'nextSong',
+  'prevSong',
+  'jumpNow',
+];
+
+function MidiCard() {
+  const midi = useAppStore((s) => s.midi);
+  const locked = useAppStore((s) => s.locked);
+
+  return (
+    <Card title="MIDI-Controller">
+      <p className="text-sm text-stage-muted">
+        {midi.available
+          ? `Input aktiv: ${midi.inputName ?? '?'}`
+          : 'Kein MIDI-Modul geladen — Mappings bleiben editierbar (Aktivierung siehe README).'}
+      </p>
+
+      {midi.mappings.length > 0 ? (
+        <ul className="space-y-1 text-sm" data-testid="midi-mappings">
+          {midi.mappings.map((mapping, index) => (
+            <li
+              key={`${mapping.action}-${index}`}
+              className="flex items-center gap-2 rounded-lg border border-stage-border bg-stage-surface-2 px-3 py-2"
+            >
+              <span className="font-mono">
+                {mapping.event} ch{mapping.channel} {mapping.data1}
+              </span>
+              <span className="text-stage-muted">→</span>
+              <span className="font-semibold">{mapping.action}</span>
+              {!locked ? (
+                <button
+                  type="button"
+                  aria-label={`Mapping für ${mapping.action} löschen`}
+                  onClick={() => send({ type: 'midiMappingDelete', index })}
+                  className="ml-auto text-stage-danger hover:underline"
+                >
+                  ✕
+                </button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-sm text-stage-muted">Noch keine Mappings.</p>
+      )}
+
+      {!locked ? (
+        <div className="flex flex-wrap gap-2">
+          {LEARNABLE_ACTIONS.map((action) => (
+            <Button
+              key={action}
+              size="sm"
+              label={midi.learning === action ? `… ${action} (warte auf MIDI)` : `Learn: ${action}`}
+              variant={midi.learning === action ? 'warn' : 'default'}
+              disabled={!midi.available && midi.learning !== action}
+              onClick={() =>
+                midi.learning === action
+                  ? send({ type: 'midiLearnCancel' })
+                  : send({ type: 'midiLearnStart', action })
+              }
+            />
+          ))}
+        </div>
+      ) : null}
+      {midi.lastEvent ? (
+        <p className="font-mono text-xs text-stage-muted">
+          Letztes Event: status {midi.lastEvent.status} · data {midi.lastEvent.data1}/
+          {midi.lastEvent.data2}
+        </p>
+      ) : null}
+    </Card>
+  );
+}
+
+function ProjectsCard() {
+  const projects = useAppStore((s) => s.projects);
+  const locked = useAppStore((s) => s.locked);
+  const bridge = useAppStore((s) => s.bridge);
+  if (projects.length === 0) return null;
+
+  return (
+    <Card title="Live-Projekte (Multi-File)">
+      <ul className="space-y-2 text-sm" data-testid="projects-list">
+        {projects.map((project) => (
+          <li
+            key={project.path}
+            className="flex flex-wrap items-center gap-3 rounded-lg border border-stage-border bg-stage-surface-2 px-3 py-2"
+          >
+            <span className="font-semibold">{project.name}</span>
+            <span className="truncate font-mono text-xs text-stage-muted">{project.path}</span>
+            {!locked ? (
+              <span className="ml-auto">
+                <Button
+                  size="sm"
+                  label="In Live öffnen"
+                  onClick={() => send({ type: 'projectOpen', path: project.path })}
+                />
+              </span>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+      <p className="text-xs text-stage-muted">
+        Öffnet die Projektdatei auf dem Host-Rechner (Live fragt ggf. nach Speichern);
+        die Bridge verbindet sich automatisch neu{bridge?.connected ? '' : ' — aktuell getrennt'}.
+        Registrierung: <code>&lt;data-dir&gt;/projects.json</code>.
+      </p>
+    </Card>
   );
 }
 

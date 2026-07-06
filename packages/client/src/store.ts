@@ -1,12 +1,15 @@
 import { create } from 'zustand';
 import {
   INITIAL_ENGINE,
+  INITIAL_MIDI,
   INITIAL_TRANSPORT,
   songWithOverrides,
   type BridgeStatus,
   type ClockRule,
   type EngineState,
+  type MidiState,
   type MirrorTargetStatus,
+  type ProjectFileInfo,
   type ServerMessage,
   type Setlist,
   type SetlistEntry,
@@ -16,7 +19,7 @@ import {
 } from '@unableset/shared';
 
 export type ConnectionState = 'connecting' | 'open' | 'closed';
-export type ViewTab = 'performance' | 'setlist' | 'lyrics' | 'mixer' | 'settings';
+export type ViewTab = 'performance' | 'setlist' | 'lyrics' | 'mixer' | 'canvas' | 'settings';
 
 /** Pro Gerät gespeicherte, unkritische Präferenzen (localStorage). */
 interface LocalPrefs {
@@ -58,6 +61,9 @@ interface AppState {
   tracks: TrackInfo[];
   clockRules: ClockRule[];
   mirrors: MirrorTargetStatus[];
+  midi: MidiState;
+  projects: ProjectFileInfo[];
+  shared: Record<string, string | number | boolean>;
 
   view: ViewTab;
   locked: boolean;
@@ -86,6 +92,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   tracks: [],
   clockRules: [],
   mirrors: [],
+  midi: INITIAL_MIDI,
+  projects: [],
+  shared: {},
 
   view: prefs.view,
   locked: prefs.locked,
@@ -108,6 +117,9 @@ export const useAppStore = create<AppState>((set, get) => ({
           tracks: message.state.tracks,
           clockRules: message.state.clockRules,
           mirrors: message.state.mirrors,
+          midi: message.state.midi,
+          projects: message.state.projects,
+          shared: message.state.shared,
         });
         break;
       case 'transport':
@@ -133,6 +145,15 @@ export const useAppStore = create<AppState>((set, get) => ({
         break;
       case 'mirrors':
         set({ mirrors: message.mirrors });
+        break;
+      case 'midi':
+        set({ midi: message.midi });
+        break;
+      case 'projects':
+        set({ projects: message.projects });
+        break;
+      case 'shared':
+        set({ shared: message.values });
         break;
       case 'pong':
         break;

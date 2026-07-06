@@ -28,10 +28,16 @@ export function LyricsView() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const song = resolved ?? currentSong;
+  // Beat-synchronisierte Lyrics aus MIDI-Clips haben Vorrang vor dem Override-Text
+  const timedLyrics = currentSong?.timedLyrics;
   const lyrics = resolved?.lyrics ?? '';
-  const lines = useMemo(() => lyrics.split('\n'), [lyrics]);
+  const lines = useMemo(() => {
+    if (timedLyrics && timedLyrics.length > 0) return timedLyrics.map((line) => line.text);
+    return lyrics.split('\n');
+  }, [lyrics, timedLyrics]);
 
-  // Fortschritt im Song (0..1) → aktive Zeile + Auto-Scroll
+  // Aktive Zeile: bei getimten Lyrics die letzte Zeile mit beat <= Position,
+  // sonst proportional zum Song-Fortschritt
   const progress =
     currentSong && currentSong.lengthBeats > 0
       ? Math.min(
@@ -40,10 +46,19 @@ export function LyricsView() {
         )
       : 0;
   const textLines = lines.filter((line) => !line.startsWith('.'));
-  const activeTextIndex = Math.min(
-    textLines.length - 1,
-    Math.floor(progress * Math.max(1, textLines.length)),
-  );
+  let activeTextIndex: number;
+  if (timedLyrics && timedLyrics.length > 0) {
+    activeTextIndex = -1;
+    for (let i = 0; i < timedLyrics.length; i++) {
+      if (timedLyrics[i].beat <= transport.positionBeats) activeTextIndex = i;
+    }
+    if (activeTextIndex < 0) activeTextIndex = 0;
+  } else {
+    activeTextIndex = Math.min(
+      textLines.length - 1,
+      Math.floor(progress * Math.max(1, textLines.length)),
+    );
+  }
 
   useEffect(() => {
     if (editing || !scrollRef.current) return;
@@ -77,7 +92,14 @@ export function LyricsView() {
   return (
     <div className="flex flex-col gap-3" data-testid="lyrics-view">
       <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-2xl font-black">{song.title}</h2>
+        <h2 className="text-2xl font-black">
+          {song.title}
+          {timedLyrics && timedLyrics.length > 0 ? (
+            <span className="ml-2 rounded bg-stage-ok/15 px-1.5 py-0.5 align-middle text-xs font-bold text-stage-ok">
+              SYNC
+            </span>
+          ) : null}
+        </h2>
         {!locked && currentEntry ? (
           <button
             type="button"
@@ -96,7 +118,7 @@ export function LyricsView() {
           placeholder={'Verszeile 1\nVerszeile 2\n.C  G  Am  F   ← Zeilen mit "." sind Akkorde'}
           className="h-[60vh] w-full rounded-xl border border-stage-border bg-stage-surface p-4 font-mono text-lg"
         />
-      ) : lyrics ? (
+      ) : (timedLyrics && timedLyrics.length > 0) || lyrics ? (
         <div
           ref={scrollRef}
           className="h-[65vh] overflow-y-auto rounded-2xl border border-stage-border bg-stage-surface px-6 py-[30vh]"

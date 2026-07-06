@@ -6,6 +6,7 @@ import { PerformanceView } from './views/PerformanceView.js';
 import { SetlistView } from './views/SetlistView.js';
 import { LyricsView } from './views/LyricsView.js';
 import { MixerView } from './views/MixerView.js';
+import { CanvasView } from './views/CanvasView.js';
 import { SettingsView } from './views/SettingsView.js';
 
 const TABS: { id: ViewTab; label: string }[] = [
@@ -13,6 +14,7 @@ const TABS: { id: ViewTab; label: string }[] = [
   { id: 'setlist', label: 'Setlist' },
   { id: 'lyrics', label: 'Lyrics' },
   { id: 'mixer', label: 'Mixer' },
+  { id: 'canvas', label: 'Canvas' },
   { id: 'settings', label: 'Settings' },
 ];
 
@@ -82,6 +84,7 @@ export default function App() {
         {view === 'setlist' ? <SetlistView /> : null}
         {view === 'lyrics' ? <LyricsView /> : null}
         {view === 'mixer' ? <MixerView /> : null}
+        {view === 'canvas' ? <CanvasView /> : null}
         {view === 'settings' ? <SettingsView /> : null}
       </main>
 

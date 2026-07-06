@@ -120,20 +120,31 @@ function SetlistPicker() {
             placeholder={'# Set 1\nSongtitel 1\nSongtitel 2\n# Set 2\n…'}
             className="h-32 w-full rounded-lg border border-stage-border bg-stage-surface-2 p-3 font-mono text-sm"
           />
-          <button
-            type="button"
-            className="mt-2 min-h-11 rounded-lg border border-stage-accent bg-stage-accent/15 px-4 text-sm font-semibold text-stage-accent"
-            onClick={() => {
-              const name = prompt('Name der importierten Setlist:', 'Import');
-              if (name) {
-                send({ type: 'setlistImportText', name, text: importText });
-                setImportOpen(false);
-                setImportText('');
-              }
-            }}
-          >
-            Import als neue Setlist
-          </button>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="min-h-11 rounded-lg border border-stage-accent bg-stage-accent/15 px-4 text-sm font-semibold text-stage-accent"
+              onClick={() => {
+                const name = prompt('Name der importierten Setlist:', 'Import');
+                if (name) {
+                  // CSV (BandHelper-Export) wird an Kommas/Headern erkannt
+                  const isCsv = /,|;/.test(importText.split('\n')[0] ?? '');
+                  send(
+                    isCsv
+                      ? { type: 'setlistImportCsv', name, csv: importText }
+                      : { type: 'setlistImportText', name, text: importText },
+                  );
+                  setImportOpen(false);
+                  setImportText('');
+                }
+              }}
+            >
+              Import als neue Setlist
+            </button>
+            <span className="self-center text-xs text-stage-muted">
+              Plaintext (eine Zeile = ein Song) oder CSV (BandHelper-Export, Titel-Spalte)
+            </span>
+          </div>
         </div>
       ) : null}
     </div>
