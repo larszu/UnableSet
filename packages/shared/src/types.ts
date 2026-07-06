@@ -42,6 +42,13 @@ export interface Section {
   guideTracks?: string[];
 }
 
+/** Zeitlich verankerte Lyric-Zeile (aus MIDI-Clips auf Lyrics-Tracks). */
+export interface TimedLyricLine {
+  /** Absolute Position in Beats (Clip-Start im Arrangement). */
+  beat: number;
+  text: string;
+}
+
 export interface Song {
   id: SongId;
   title: string;
@@ -51,6 +58,8 @@ export interface Song {
   notes?: string;
   /** Lyrics/Chords als Text; Zeilen mit führendem "." werden als Akkordzeile gerendert. */
   lyrics?: string;
+  /** Beat-synchronisierte Lyrics aus MIDI-Clips (Tracks namens "Lyrics…"). */
+  timedLyrics?: TimedLyricLine[];
   startBeat: number;
   lengthBeats: number;
   bpm?: number;
@@ -160,6 +169,41 @@ export interface MirrorTargetStatus {
   corrections: number;
 }
 
+/** Fernsteuer-Aktion (MIDI-Mapping, OSC-Remote, Canvas-Buttons). */
+export type RemoteActionName =
+  | 'play'
+  | 'stop'
+  | 'continue'
+  | 'nextSong'
+  | 'prevSong'
+  | 'jumpNow';
+
+export interface MidiMappingInfo {
+  event: 'noteOn' | 'cc' | 'programChange';
+  channel: number;
+  data1: number;
+  threshold?: number;
+  action: RemoteActionName;
+}
+
+/** Zustand des MIDI-Subsystems (Hardware optional). */
+export interface MidiState {
+  /** Hardware-Modul geladen und Input geöffnet? */
+  available: boolean;
+  inputName?: string;
+  mappings: MidiMappingInfo[];
+  /** Learn-Modus aktiv für diese Aktion (wartet auf das nächste Event). */
+  learning?: RemoteActionName;
+  /** Zuletzt empfangenes Event (Anzeige beim Lernen). */
+  lastEvent?: { status: number; data1: number; data2: number };
+}
+
+/** Registrierte Live-Projektdatei (Multi-File-Workflow). */
+export interface ProjectFileInfo {
+  name: string;
+  path: string;
+}
+
 /** Uhrzeit-basierte Aktion („um 20:00 → Play"). */
 export interface ClockRule {
   id: string;
@@ -181,7 +225,13 @@ export interface HostState {
   tracks: TrackInfo[];
   clockRules: ClockRule[];
   mirrors: MirrorTargetStatus[];
+  midi: MidiState;
+  projects: ProjectFileInfo[];
+  /** Geteilter Key-Value-Store für Canvas-Scripte (shared()/setShared()). */
+  shared: Record<string, string | number | boolean>;
 }
+
+export const INITIAL_MIDI: MidiState = { available: false, mappings: [] };
 
 export const INITIAL_TRANSPORT: TransportState = {
   isPlaying: false,

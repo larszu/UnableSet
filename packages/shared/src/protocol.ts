@@ -12,7 +12,11 @@ import type {
   EngineState,
   HostState,
   JumpMode,
+  MidiState,
   MirrorTargetStatus,
+  OscMessage,
+  ProjectFileInfo,
+  RemoteActionName,
   Setlist,
   Song,
   SongId,
@@ -59,7 +63,20 @@ export type ClientMessage =
   | { type: 'mixerRefresh' }
   | { type: 'mixerSet'; trackIndex: number; field: 'volume' | 'mute' | 'solo'; value: number | boolean }
   // --- Clock-Aktionen (M8) ---
-  | { type: 'clockRulesUpdate'; rules: ClockRule[] };
+  | { type: 'clockRulesUpdate'; rules: ClockRule[] }
+  // --- MIDI-Learn (M5) ---
+  | { type: 'midiLearnStart'; action: RemoteActionName }
+  | { type: 'midiLearnCancel' }
+  | { type: 'midiMappingDelete'; index: number }
+  // --- Lyrics aus MIDI-Clips (M4) ---
+  | { type: 'refreshLyrics' }
+  // --- BandHelper-/CSV-Import (M8) ---
+  | { type: 'setlistImportCsv'; name: string; csv: string }
+  // --- Multi-File-Projekte (M8) ---
+  | { type: 'projectOpen'; path: string }
+  // --- Canvas & Scripting (M7) ---
+  | { type: 'sendOsc'; message: OscMessage }
+  | { type: 'sharedSet'; key: string; value: string | number | boolean };
 
 // ---------------------------------------------------------------------------
 // Host → Client
@@ -75,6 +92,9 @@ export type ServerMessage =
   | { type: 'clockRules'; rules: ClockRule[] }
   | { type: 'bridge'; bridge: BridgeStatus }
   | { type: 'mirrors'; mirrors: MirrorTargetStatus[] }
+  | { type: 'midi'; midi: MidiState }
+  | { type: 'projects'; projects: ProjectFileInfo[] }
+  | { type: 'shared'; values: Record<string, string | number | boolean> }
   | { type: 'pong'; id: number; sentAt: number; serverTime: number };
 
 // ---------------------------------------------------------------------------
@@ -105,6 +125,14 @@ const CLIENT_MESSAGE_TYPES = new Set([
   'mixerRefresh',
   'mixerSet',
   'clockRulesUpdate',
+  'midiLearnStart',
+  'midiLearnCancel',
+  'midiMappingDelete',
+  'refreshLyrics',
+  'setlistImportCsv',
+  'projectOpen',
+  'sendOsc',
+  'sharedSet',
 ]);
 
 const SERVER_MESSAGE_TYPES = new Set([
@@ -117,6 +145,9 @@ const SERVER_MESSAGE_TYPES = new Set([
   'clockRules',
   'bridge',
   'mirrors',
+  'midi',
+  'projects',
+  'shared',
   'pong',
 ]);
 

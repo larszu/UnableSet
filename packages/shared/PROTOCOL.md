@@ -46,6 +46,14 @@ Snapshot.
 | `mixerRefresh` | – | Tracks neu aus Live lesen |
 | `mixerSet` | `trackIndex`, `field`, `value` | `volume` (0..1) / `mute` / `solo` |
 | `clockRulesUpdate` | `rules: ClockRule[]` | Uhrzeit-Aktionen ersetzen |
+| `refreshLyrics` | – | Lyric-Zeilen aus MIDI-Clips (Lyrics-Tracks) neu lesen |
+| `midiLearnStart` | `action` | Learn-Modus starten (nächstes MIDI-Event wird gemappt) |
+| `midiLearnCancel` | – | Learn-Modus abbrechen |
+| `midiMappingDelete` | `index` | MIDI-Mapping entfernen |
+| `setlistImportCsv` | `name`, `csv` | Import aus CSV/BandHelper-Export (Titel-Spalte) |
+| `projectOpen` | `path` | Registrierte Live-Projektdatei öffnen (Multi-File) |
+| `sendOsc` | `message: OscMessage` | Canvas: OSC an die Out-Ziele senden |
+| `sharedSet` | `key`, `value` | Canvas: geteilten Script-Wert setzen |
 
 ### Host → Client
 
@@ -59,6 +67,10 @@ Snapshot.
 | `tracks` | `tracks: TrackInfo[]` | Mixer-Zustand gelesen |
 | `clockRules` | `rules` | Clock-Regeln geändert |
 | `bridge` | `bridge` | Verbindungsstatus zur Ableton-Bridge |
+| `mirrors` | `mirrors` | Status der Backup-Rigs (M6) |
+| `midi` | `midi: MidiState` | MIDI-Zustand, Mappings, Learn-Modus |
+| `projects` | `projects` | Registrierte Live-Projektdateien |
+| `shared` | `values` | Geteilter Key-Value-Store (Canvas-Scripting) |
 | `pong` | `id`, `sentAt`, `serverTime` | Antwort auf `ping` |
 
 ### REST (ergänzend)

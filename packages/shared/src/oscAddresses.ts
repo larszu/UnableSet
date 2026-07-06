@@ -26,6 +26,7 @@ export const OSC_ADDR = {
     getSignatureNumerator: '/live/song/get/signature_numerator',
     getSignatureDenominator: '/live/song/get/signature_denominator',
     getNumTracks: '/live/song/get/num_tracks',
+    getTrackNames: '/live/song/get/track_names',
     startPlaying: '/live/song/start_playing',
     stopPlaying: '/live/song/stop_playing',
     continuePlaying: '/live/song/continue_playing',
@@ -36,6 +37,7 @@ export const OSC_ADDR = {
   },
   track: {
     getName: '/live/track/get/name',
+    getArrangementClips: '/live/track/get/arrangement_clips',
     getVolume: '/live/track/get/volume',
     setVolume: '/live/track/set/volume',
     getMute: '/live/track/get/mute',
