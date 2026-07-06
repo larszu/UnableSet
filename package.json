@@ -23,12 +23,15 @@
     "test": "pnpm -r test",
     "test:e2e": "playwright test",
     "simulator": "node packages/bridge/dist/simulator-cli.js",
-    "screenshots": "node scripts/screenshots.mjs"
+    "screenshots": "node scripts/screenshots.mjs",
+    "bundle:server": "node scripts/bundle-server.mjs",
+    "dist:desktop": "pnpm build && pnpm bundle:server"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.61.1",
     "concurrently": "^10.0.3",
+    "esbuild": "^0.25.0",
     "eslint": "^10.6.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.3",

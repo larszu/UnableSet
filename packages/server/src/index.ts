@@ -31,8 +31,16 @@ function readServerVersion(): string {
 }
 
 function findClientDist(): string | undefined {
-  const candidate = join(here, '..', '..', 'client', 'dist');
-  return existsSync(candidate) ? candidate : undefined;
+  // Explizite Override für gepacktes Packaging (Electron setzt das)
+  const override = process.env.UNABLESET_CLIENT_DIST;
+  if (override && existsSync(override)) return override;
+  for (const candidate of [
+    join(here, '..', '..', 'client', 'dist'), // dev: packages/server/dist
+    join(here, '..', 'client', 'dist'), // bundle: packages/server/dist-bundle
+  ]) {
+    if (existsSync(candidate)) return candidate;
+  }
+  return undefined;
 }
 
 const config = parseConfig(process.argv.slice(2));
