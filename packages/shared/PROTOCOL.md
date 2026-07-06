@@ -172,6 +172,62 @@ für den QR-Code.
 
 ---
 
+## 5. AbleSet-Companion-Kompatibilität (OSC)
+
+UnableSet bedient zusätzlich den OSC-Adressraum, den das quelloffene
+Bitfocus-Companion-Modul
+[`companion-module-leolabs-ableset`](https://github.com/bitfocus/companion-module-leolabs-ableset)
+(MIT) mit AbleSet spricht. Damit steuert das **vorhandene** AbleSet-Modul
+UnableSet ohne Anpassung — reine Interoperabilität (Clean-Room, kein
+AbleSet-/Modul-Code übernommen). Implementierung:
+`packages/server/src/ablesetCompat.ts`.
+
+- Port: UDP **39051** (Default; `--ableset-port N`, `0` = aus).
+- Handshake wie im Modul: Client sendet
+  `/subscribe ['auto', <clientPort>, 'Companion', <fineUpdates>]`, dann
+  `/getValues`; UnableSet sendet alle Werte an `<clientIP>:<clientPort>`.
+  Ohne Traffic wird ≥ 1×/s ein Keepalive gesendet (Modul-Timeout 3 s).
+  `/unsubscribe` beendet.
+
+### Vom Modul gesendete Commands → UnableSet
+
+| Adresse | Wirkung in UnableSet |
+|---|---|
+| `/global/play` | Play |
+| `/global/pause`, `/global/stop` | Stop |
+| `/setlist/jumpToSong <int\|name\|RANDOM>` | Song cuen (Position 1-basiert) |
+| `/setlist/jumpBySongs <int> [force]` | um n Songs weiter/zurück cuen; `force` = sofort |
+| `/setlist/jumpToSection <int\|name>` | Section cuen |
+| `/setlist/jumpBySections <int> [force]` | um n Sections weiter/zurück |
+| `/setlist/playCuedSong` | gequeueten Sprung sofort ausführen |
+| `/setlist/enableLoop`, `/setlist/escapeLoop` | aktuelle Section loopen / Loop verlassen |
+| `/settings/jumpMode <string>` | Jump-Modus (`quantized`/`end-of-section`/`end-of-song`/`dynamic`/`manual`) |
+| `/settings/safeMode`, `/settings/removePlayedSongs` | Safe Mode / gespielte ausblenden |
+
+Record- und Audio-Interface-/Mixer-Adressen haben in UnableSet keine
+1:1-Entsprechung und werden still ignoriert.
+
+### Von UnableSet zurückgemeldete Werte (Feedbacks/Variablen des Moduls)
+
+`/global/beatsPosition`, `/global/humanPosition`, `/global/currentMeasure`,
+`/global/tempo`, `/global/isPlaying`, `/global/isRecording`,
+`/global/timeSignature`; `/setlist/name`, `/setlist/songs`,
+`/setlist/sections`, `/setlist/sectionColors`, `/setlist/activeSongName`,
+`/setlist/activeSongIndex`, `/setlist/activeSongStart|End`,
+`/setlist/activeSectionName|Index|Start|End`, `/setlist/queuedName`,
+`/setlist/queuedIndex`, `/setlist/loopEnabled|Start|End`,
+`/setlist/remainingTimeInSong`, `/setlist/remainingTimeInSet`;
+`/settings/jumpMode|safeMode|removePlayedSongs`;
+`/timecode/tc|fps|stale`.
+
+**Kalibrier-Hinweis:** Song-/Section-*Positionen* für `jumpTo…` sind
+1-basiert, die zurückgemeldeten *Indizes* 0-basiert (AbleSet-Konvention).
+Beides sind explizite Konstanten in `ablesetCompat.ts` — der einzige Punkt,
+der gegen echtes AbleSet final zu bestätigen ist (der OSC-Adressraum selbst
+ist gegen die Modul-Quelle verifiziert).
+
+---
+
 ## 4. Locator-Notation (Cue-Point-Namen → Setlist)
 
 Der Parser (`packages/bridge/src/locatorParser.ts`) versteht:

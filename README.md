@@ -37,6 +37,9 @@ Setlist — **ohne die Live-Session anzufassen** und **ohne Internetverbindung**
   aus der App öffnen)
 - **OSC-Out-Feed** an Floor-Displays/Licht/Video (herstellerneutral) +
   `oscOnEnter`-Befehle pro Song (z. B. Licht-Preset beim Songstart)
+- **AbleSet-Companion-Kompatibilität**: das bestehende Bitfocus-Companion-
+  Modul `companion-module-leolabs-ableset` steuert UnableSet ohne Anpassung
+  (OSC auf Port 39051) — reine Interoperabilität, kein fremder Code
 - **Redundanz (M6)**: `--mirror` spiegelt alle Kommandos an Backup-Rigs,
   misst Drift und korrigiert automatisch — bis alle in Sync sind
 - **Clock-Aktionen**: „um 20:00 → Play" (Show-Start, Curfew)
@@ -139,6 +142,7 @@ pnpm screenshots        # README-Screenshots headless neu erzeugen
 | `--mirror` | – | Backup-Rigs für Redundanz, z. B. `192.168.1.20:11000` |
 | `--osc-out` | – | Ziele für den Status-Feed, z. B. `192.168.1.30:8000` |
 | `--no-mdns` | – | mDNS-Advertising abschalten |
+| `--ableset-port` | `39051` | AbleSet-Companion-Kompatibilität (0 = aus) |
 
 Der Host läuft headless auf macOS, Windows und Raspberry Pi 5 (arm64) —
 z. B. als systemd-Service mit `Restart=always` (Watchdog).
@@ -191,6 +195,23 @@ und im Server-Package `@julusian/midi` installieren
 (`pnpm --filter @unableset/server add @julusian/midi`) — ohne das Modul bleibt
 MIDI einfach deaktiviert.
 
+## Bitfocus Companion (AbleSet-Modul)
+
+UnableSet spricht den OSC-Adressraum des vorhandenen AbleSet-Companion-Moduls,
+sodass Fußcontroller/Stream-Decks ohne Umbau funktionieren:
+
+1. In Companion die Connection **„AbleSet"** (`companion-module-leolabs-ableset`)
+   hinzufügen.
+2. Als **Server Host/IP** die Adresse des Rechners eintragen, auf dem der
+   UnableSet-Host läuft (bei gleichem Rechner leer lassen).
+3. Fertig — Actions (Play/Stop, Jump to Song/Section, Loop, Settings) und
+   Feedbacks/Variablen (aktueller Song, Position, Restzeit, Tempo …) sind
+   aktiv.
+
+Der Host lauscht dafür auf UDP **39051** (wie AbleSet); mit `--ableset-port 0`
+abschaltbar. Generisches OSC (TouchOSC/Open Stage Control) geht weiterhin
+zusätzlich über `/unableset/*` (siehe [PROTOCOL.md](packages/shared/PROTOCOL.md)).
+
 ## Tests
 
 - **122 Unit-/Integrationstests** (Vitest): Locator-Parser, Song-/Section-
@@ -205,6 +226,9 @@ MIDI einfach deaktiviert.
   PWA-Auslieferung
 - **M6-Redundanz** unit- und CLI-getestet mit zwei Simulatoren (Spiegelung,
   Drift-Korrektur, Reconnect)
+- **AbleSet-Companion-Kompatibilität**: 8 Integrationstests + CLI-Smoke mit
+  einem Fake-Companion (subscribe → Wertesatz → Commands treiben die Engine),
+  gegen den Adressraum der Modul-Quelle verifiziert
 - **Sicherheit:** `pnpm audit` clean; Host gehärtet (CSP + Security-Header,
   WS-Payload-Limit + Ratenbegrenzung, sandboxed Scripting, Pfad-Allowlist) —
   Details in [SECURITY.md](SECURITY.md)
