@@ -64,6 +64,11 @@ Setlist — **ohne die Live-Session anzufassen** und **ohne Internetverbindung**
 
 ## Architektur
 
+[![App-Struktur](docs/screenshots/app-structure.png)](docs/app-structure.html)
+
+Interaktives Diagramm (ziehen/zoomen/klicken):
+[**docs/app-structure.html**](docs/app-structure.html) — self-contained, offline.
+
 ```
 Ableton Live  ←OSC/UDP→  Host (Node/TS)  ←WebSocket→  Clients (Browser/PWA)
   AbletonOSC              Single Source                Performance · Setlist
@@ -110,6 +115,25 @@ node packages/server/dist/index.js
 
 **3. Locators benennen** (siehe Notation unten), in der App „Locators neu
 laden" — fertig.
+
+### Desktop-App (macOS / Windows)
+
+Fertige Installer werden bei jedem GitHub-**Release** automatisch gebaut und
+als Assets angehängt (`.github/workflows/release.yml`):
+
+- **macOS**: DMG + ZIP für **Apple Silicon (arm64)** und **Intel (x64)**
+- **Windows**: NSIS-Installer + Portable (x64)
+
+Die Desktop-App startet den Host automatisch (Tray-Icon, Floating-Window,
+Watchdog). Lokal bauen:
+
+```bash
+pnpm dist:desktop            # Client + Server bauen und Server bündeln
+cd apps/desktop && npm install
+npm run dist:mac             # bzw. dist:win — Ergebnis in apps/desktop/release/
+```
+
+Für die Bühne/Pi reicht weiterhin der reine Server-Prozess ohne Electron.
 
 ### Ohne Ableton ausprobieren (Demo-Modus)
 

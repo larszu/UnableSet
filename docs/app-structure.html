@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>UnableSet – App-Struktur</title>
+    <style>
+      :root {
+        --bg: #0a0f1a;
+        --surface: #131b2c;
+        --surface2: #1b2740;
+        --border: #2a3a5c;
+        --text: #e8eefc;
+        --muted: #8fa1c7;
+        --accent: #38bdf8;
+        --ok: #34d399;
+        --warn: #fbbf24;
+        --danger: #f87171;
+        --violet: #a78bfa;
+        --pink: #f472b6;
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        height: 100%;
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        overflow: hidden;
+      }
+      header {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        padding: 14px 20px;
+        display: flex;
+        align-items: baseline;
+        gap: 14px;
+        flex-wrap: wrap;
+        z-index: 5;
+        pointer-events: none;
+      }
+      header h1 { margin: 0; font-size: 20px; font-weight: 800; }
+      header p { margin: 0; color: var(--muted); font-size: 13px; }
+      #legend {
+        position: absolute;
+        top: 58px;
+        left: 20px;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        z-index: 5;
+        max-width: 60%;
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 10px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: var(--surface);
+        font-size: 12px;
+        cursor: pointer;
+        user-select: none;
+        transition: opacity 0.15s;
+      }
+      .chip.off { opacity: 0.35; }
+      .chip .dot { width: 10px; height: 10px; border-radius: 50%; }
+      svg { width: 100vw; height: 100vh; display: block; cursor: grab; }
+      svg.panning { cursor: grabbing; }
+      .edge { fill: none; stroke: var(--border); stroke-width: 1.5; opacity: 0.55; transition: opacity 0.15s, stroke 0.15s; }
+      .edge.hl { stroke: var(--accent); opacity: 1; stroke-width: 2.5; }
+      .edge.dim { opacity: 0.08; }
+      .edge-label { fill: var(--muted); font-size: 10px; opacity: 0; transition: opacity 0.15s; pointer-events: none; }
+      .edge-label.hl { opacity: 1; fill: var(--accent); }
+      .node { cursor: grab; }
+      .node rect { rx: 10; stroke-width: 1.5; transition: filter 0.15s, opacity 0.15s; }
+      .node:hover rect { filter: brightness(1.25); }
+      .node.dim { opacity: 0.2; }
+      .node .title { font-size: 13px; font-weight: 700; fill: var(--text); pointer-events: none; }
+      .node .sub { font-size: 10.5px; fill: var(--muted); pointer-events: none; }
+      #panel {
+        position: absolute;
+        right: 16px;
+        top: 58px;
+        width: 320px;
+        max-width: calc(100% - 32px);
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 16px;
+        z-index: 6;
+        display: none;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+      }
+      #panel.show { display: block; }
+      #panel h2 { margin: 0 0 4px; font-size: 16px; }
+      #panel .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 999px; margin-bottom: 8px; }
+      #panel p { margin: 0 0 8px; font-size: 13px; line-height: 1.5; color: var(--muted); }
+      #panel code { background: var(--surface2); padding: 1px 5px; border-radius: 4px; font-size: 12px; color: var(--text); }
+      #panel .close { position: absolute; top: 10px; right: 12px; cursor: pointer; color: var(--muted); font-size: 18px; }
+      footer {
+        position: absolute;
+        bottom: 10px;
+        left: 20px;
+        color: var(--muted);
+        font-size: 12px;
+        z-index: 5;
+        pointer-events: none;
+      }
+      .hint { pointer-events: none; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>UnableSet</h1>
+      <p>App-Struktur &amp; Datenfluss — Knoten ziehen, Hintergrund schieben, Mausrad zoomt, Knoten anklicken für Details</p>
+    </header>
+    <div id="legend"></div>
+    <svg id="graph"></svg>
+    <div id="panel">
+      <span class="close" onclick="document.getElementById('panel').classList.remove('show')">✕</span>
+      <h2 id="p-title"></h2>
+      <span class="tag" id="p-tag"></span>
+      <p id="p-desc"></p>
+      <p id="p-file" style="font-size:12px"></p>
+    </div>
+    <footer>Legende-Chips ein/ausblenden · Doppelklick auf leere Fläche = zurücksetzen</footer>
+
+    <script>
+      // --- Kategorien (Farben) ---
+      const CATS = {
+        external: { label: 'Extern (Ableton/Controller)', color: '#8fa1c7' },
+        shared: { label: 'shared (Modell/Protokoll)', color: '#a78bfa' },
+        bridge: { label: 'bridge (Ableton-Anbindung)', color: '#34d399' },
+        server: { label: 'server (Host)', color: '#38bdf8' },
+        client: { label: 'client (PWA)', color: '#fbbf24' },
+        desktop: { label: 'desktop (Electron)', color: '#f472b6' },
+      };
+
+      // --- Knoten:  x/y in virtuellem Raum, Spalten nach Tier ---
+      const NODES = [
+        // Extern links
+        { id: 'live', cat: 'external', x: 60, y: 320, w: 150, h: 54, title: 'Ableton Live', sub: 'Arrangement + Locators', desc: 'Die Musik-Session. UnableSet liest nur (Locators/Transport/Tempo/Tracks) und steuert per OSC — die Session wird nie verändert.' },
+        { id: 'abletonosc', cat: 'external', x: 60, y: 210, w: 150, h: 50, title: 'AbletonOSC', sub: 'Remote-Script (Weg A)', desc: 'Quelloffenes MIDI-Remote-Script (MIT), das das Live Object Model per OSC/UDP exponiert. Standard-Ports 11000/11001.', file: 'packages/bridge/m4l/ (Weg B: Max for Live)' },
+
+        // Bridge
+        { id: 'oscbridge', cat: 'bridge', x: 300, y: 210, w: 168, h: 54, title: 'OscAbletonBridge', sub: 'Weg A · UDP/OSC', desc: 'Spricht per OSC mit AbletonOSC: Heartbeat/Reconnect, Change-Listener (Tempo/Playing/Taktart), Positions-Polling, Transport/Loop/Mixer, Lyric-Clips.', file: 'packages/bridge/src/OscAbletonBridge.ts' },
+        { id: 'mirror', cat: 'bridge', x: 300, y: 300, w: 168, h: 50, title: 'MirrorBridge', sub: 'M6-Redundanz', desc: 'Dekoriert die primäre Bridge und spiegelt alle Kommandos an Backup-Rigs; misst Drift und korrigiert automatisch.', file: 'packages/bridge/src/MirrorBridge.ts' },
+        { id: 'simulator', cat: 'bridge', x: 300, y: 380, w: 168, h: 50, title: 'AbletonOscSimulator', sub: 'Dev/Test/Screenshots', desc: 'Bildet die genutzte AbletonOSC-Teilmenge über echtes UDP nach (laufender Transport, Loops, Tracks, Lyric-Clips) — ohne echtes Live.', file: 'packages/bridge/src/AbletonOscSimulator.ts' },
+        { id: 'parser', cat: 'bridge', x: 300, y: 130, w: 168, h: 48, title: 'Locator-Parser + Builder', sub: 'Cue Points → Songs', desc: 'Parst die Locator-Notation ({Beschreibung}, *ignorieren, >Section, SONG END, STOP, +LOOP) und baut Songs mit Sections.', file: 'packages/bridge/src/locatorParser.ts · songBuilder.ts' },
+
+        // Bridge-Interface
+        { id: 'bridgeiface', cat: 'bridge', x: 300, y: 460, w: 168, h: 44, title: 'AbletonBridge (Interface)', sub: 'Weg A / B / Sim austauschbar', desc: 'Gemeinsames Interface — Host kennt nur dieses. Weg A (OSC), Weg B (Max for Live) und der Simulator sind austauschbar.', file: 'packages/bridge/src/AbletonBridge.ts' },
+
+        // Server (Host)
+        { id: 'store', cat: 'server', x: 560, y: 130, w: 160, h: 50, title: 'HostStore', sub: 'Single Source of Truth', desc: 'Zentraler Zustand; jede Änderung wird als ServerMessage an alle Clients gebroadcastet.', file: 'packages/server/src/hostStore.ts' },
+        { id: 'engine', cat: 'server', x: 560, y: 205, w: 160, h: 54, title: 'SetlistEngine', sub: 'Jumps · Queue · Autoplay', desc: 'Alle Jump-Modi, Queue, Safe Mode, Pre-Roll, Autoplay/STOP über die Setlist-Reihenfolge, Section-Loops, Played-Tracking.', file: 'packages/server/src/setlistEngine.ts' },
+        { id: 'hostapp', cat: 'server', x: 560, y: 285, w: 160, h: 54, title: 'hostApp', sub: 'WS + REST + Verdrahtung', desc: 'WebSocket-Server (Snapshot/Broadcast, Ratenlimit), REST, statische Client-Auslieferung, CSP/Security-Header; verdrahtet alle Dienste.', file: 'packages/server/src/hostApp.ts' },
+        { id: 'persist', cat: 'server', x: 560, y: 365, w: 160, h: 46, title: 'Persistence', sub: 'atomare JSON-Files', desc: 'Setlists/Settings atomar (tmp → .bak → rename) im --data-dir; Backup-Fallback beim Lesen.', file: 'packages/server/src/persistence.ts' },
+        { id: 'ableset', cat: 'server', x: 560, y: 435, w: 160, h: 50, title: 'AblesetCompatServer', sub: 'Companion-Kompat · :39051', desc: 'Bedient den OSC-Adressraum des AbleSet-Companion-Moduls (Clean-Room). Das bestehende Modul steuert UnableSet ohne Umbau.', file: 'packages/server/src/ablesetCompat.ts' },
+        { id: 'oscremote', cat: 'server', x: 560, y: 505, w: 160, h: 44, title: 'OscRemote / OscOut', sub: 'TouchOSC · Floor-Displays', desc: 'OSC-In-Fernsteuerung (/unableset/*) und OSC-Out-Feed an Licht/Video/Displays + oscOnEnter pro Song.', file: 'packages/server/src/oscRemote.ts · oscOut.ts' },
+        { id: 'midi', cat: 'server', x: 560, y: 565, w: 160, h: 44, title: 'MidiManager', sub: 'Learn · Hardware optional', desc: 'MIDI-Mapping mit Learn-Modus; Hardware via optionalem @julusian/midi, sonst editierbar.', file: 'packages/server/src/midiMapping.ts' },
+        { id: 'clock', cat: 'server', x: 560, y: 625, w: 160, h: 40, title: 'ClockScheduler + mDNS', sub: 'Uhrzeit-Regeln · Discovery', desc: 'Uhrzeit-Aktionen (20:00 → Play) und mDNS-Advertising (_unableset._tcp).', file: 'packages/server/src/clockActions.ts · mdns.ts' },
+
+        // Shared (unten, von allen genutzt)
+        { id: 'shared', cat: 'shared', x: 560, y: 700, w: 160, h: 50, title: 'shared', sub: 'Typen · Protokoll · Mathe', desc: 'Datenmodell, WS-Protokoll (getypte Guards), OSC-Adressen, Jump-/Beat-Mathematik, CSV/Plaintext-Import — von Bridge, Server und Client gemeinsam genutzt.', file: 'packages/shared/src/' },
+
+        // Client
+        { id: 'ws', cat: 'client', x: 830, y: 205, w: 150, h: 48, title: 'ws + store', sub: 'Reconnect · Zustand', desc: 'WebSocket mit Auto-Reconnect (Backoff) und voller Snapshot-Wiederherstellung; Zustand hält nie eigene Wahrheit.', file: 'packages/client/src/ws.ts · store.ts' },
+        { id: 'views', cat: 'client', x: 830, y: 285, w: 150, h: 62, title: 'Views', sub: 'Performance · Setlist · Lyrics · Mixer · Canvas · Settings', desc: 'React-19-Views, sperrbar pro Gerät. Canvas mit sandboxed Scripting (Web Worker).', file: 'packages/client/src/views/' },
+        { id: 'pwa', cat: 'client', x: 830, y: 375, w: 150, h: 44, title: 'PWA', sub: 'SW · Wake-Lock · Icons', desc: 'Installierbar, Offline-Shell per Service Worker, Screen-Wake-Lock, 2000+-Marker-Skalierung.', file: 'packages/client/public/' },
+
+        // Externe Controller/Ziele rechts
+        { id: 'companion', cat: 'external', x: 830, y: 460, w: 150, h: 46, title: 'Bitfocus Companion', sub: 'AbleSet-Modul · OSC', desc: 'Das bestehende companion-module-leolabs-ableset steuert UnableSet über den kompatiblen OSC-Port 39051.' },
+        { id: 'touchosc', cat: 'external', x: 830, y: 520, w: 150, h: 42, title: 'TouchOSC / OSC', sub: '/unableset/*', desc: 'Beliebige OSC-Controller steuern die Kern-Aktionen.' },
+        { id: 'backups', cat: 'external', x: 300, y: 540, w: 168, h: 44, title: 'Backup-Rigs', sub: 'AbletonOSC (Redundanz)', desc: 'Weitere Live-Rechner, an die die MirrorBridge alle Kommandos spiegelt.' },
+
+        // Desktop
+        { id: 'desktop', cat: 'desktop', x: 830, y: 620, w: 150, h: 50, title: 'Electron-Hülle', sub: 'Tray · Auto-Start · Watchdog', desc: 'Optionale Desktop-App: startet den Host, Tray + Floating-Window, Watchdog. Host läuft auch ganz ohne Electron.', file: 'apps/desktop/' },
+      ];
+
+      // --- Kanten (from → to, label, category-of-flow) ---
+      const EDGES = [
+        { s: 'abletonosc', t: 'live', l: 'OSC/UDP' },
+        { s: 'oscbridge', t: 'abletonosc', l: 'OSC 11000/11001' },
+        { s: 'mirror', t: 'oscbridge', l: 'dekoriert' },
+        { s: 'mirror', t: 'backups', l: 'spiegelt (OSC)' },
+        { s: 'oscbridge', t: 'parser', l: 'Cue Points' },
+        { s: 'oscbridge', t: 'bridgeiface', l: 'implementiert' },
+        { s: 'mirror', t: 'bridgeiface', l: 'implementiert' },
+        { s: 'simulator', t: 'bridgeiface', l: 'ersetzt (Test)' },
+        { s: 'hostapp', t: 'bridgeiface', l: 'nutzt' },
+        { s: 'engine', t: 'bridgeiface', l: 'steuert' },
+        { s: 'hostapp', t: 'store', l: '' },
+        { s: 'hostapp', t: 'engine', l: '' },
+        { s: 'hostapp', t: 'persist', l: '' },
+        { s: 'hostapp', t: 'ableset', l: '' },
+        { s: 'hostapp', t: 'oscremote', l: '' },
+        { s: 'hostapp', t: 'midi', l: '' },
+        { s: 'hostapp', t: 'clock', l: '' },
+        { s: 'engine', t: 'store', l: 'changed' },
+        { s: 'ableset', t: 'store', l: 'Feedback-Feed' },
+        { s: 'ws', t: 'hostapp', l: 'WebSocket' },
+        { s: 'views', t: 'ws', l: '' },
+        { s: 'pwa', t: 'views', l: '' },
+        { s: 'companion', t: 'ableset', l: 'OSC 39051' },
+        { s: 'touchosc', t: 'oscremote', l: 'OSC 9000' },
+        { s: 'midi', t: 'oscremote', l: '' },
+        { s: 'desktop', t: 'hostapp', l: 'fork + Tray' },
+        // shared wird von allen genutzt
+        { s: 'parser', t: 'shared', l: '' },
+        { s: 'engine', t: 'shared', l: '' },
+        { s: 'store', t: 'shared', l: '' },
+        { s: 'ableset', t: 'shared', l: '' },
+        { s: 'ws', t: 'shared', l: '' },
+        { s: 'views', t: 'shared', l: '' },
+      ];
+
+      // Etwas Kopf-Abstand, damit die oberste Reihe nicht unter der Legende liegt
+      for (const n of NODES) n.y += 70;
+
+      const svg = document.getElementById('graph');
+      const SVGNS = 'http://www.w3.org/2000/svg';
+      const nodeById = Object.fromEntries(NODES.map((n) => [n.id, n]));
+
+      // Viewbox / Pan-Zoom
+      let vb = { x: 0, y: 110, w: 1060, h: 800 };
+      function applyVB() {
+        svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
+      }
+      applyVB();
+
+      const gEdges = document.createElementNS(SVGNS, 'g');
+      const gLabels = document.createElementNS(SVGNS, 'g');
+      const gNodes = document.createElementNS(SVGNS, 'g');
+      svg.append(gEdges, gLabels, gNodes);
+
+      const cx = (n) => n.x + n.w / 2;
+      const cy = (n) => n.y + n.h / 2;
+
+      const edgeEls = EDGES.map((e) => {
+        const path = document.createElementNS(SVGNS, 'path');
+        path.setAttribute('class', 'edge');
+        gEdges.appendChild(path);
+        let label = null;
+        if (e.l) {
+          label = document.createElementNS(SVGNS, 'text');
+          label.setAttribute('class', 'edge-label');
+          label.setAttribute('text-anchor', 'middle');
+          label.textContent = e.l;
+          gLabels.appendChild(label);
+        }
+        return { e, path, label };
+      });
+
+      function edgePath(a, b) {
+        const x1 = cx(a), y1 = cy(a), x2 = cx(b), y2 = cy(b);
+        const mx = (x1 + x2) / 2;
+        return `M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`;
+      }
+
+      function layoutEdges() {
+        for (const { e, path, label } of edgeEls) {
+          const a = nodeById[e.s], b = nodeById[e.t];
+          path.setAttribute('d', edgePath(a, b));
+          if (label) {
+            label.setAttribute('x', (cx(a) + cx(b)) / 2);
+            label.setAttribute('y', (cy(a) + cy(b)) / 2 - 4);
+          }
+        }
+      }
+
+      const nodeEls = {};
+      for (const n of NODES) {
+        const g = document.createElementNS(SVGNS, 'g');
+        g.setAttribute('class', 'node');
+        g.dataset.id = n.id;
+        const color = CATS[n.cat].color;
+        const rect = document.createElementNS(SVGNS, 'rect');
+        rect.setAttribute('width', n.w);
+        rect.setAttribute('height', n.h);
+        rect.setAttribute('fill', color + '22');
+        rect.setAttribute('stroke', color);
+        g.appendChild(rect);
+        const title = document.createElementNS(SVGNS, 'text');
+        title.setAttribute('class', 'title');
+        title.setAttribute('x', 12);
+        title.setAttribute('y', 22);
+        title.textContent = n.title;
+        g.appendChild(title);
+        // Sub (mit einfachem Wrap)
+        const words = n.sub.split(' ');
+        let line = '', lineNo = 0;
+        const maxChars = Math.floor((n.w - 20) / 5.6);
+        const emit = (txt, dy) => {
+          const t = document.createElementNS(SVGNS, 'text');
+          t.setAttribute('class', 'sub');
+          t.setAttribute('x', 12);
+          t.setAttribute('y', 38 + dy * 12);
+          t.textContent = txt;
+          g.appendChild(t);
+        };
+        for (const w of words) {
+          if ((line + ' ' + w).trim().length > maxChars && line) { emit(line, lineNo++); line = w; }
+          else line = (line + ' ' + w).trim();
+        }
+        if (line) emit(line, lineNo);
+        gNodes.appendChild(g);
+        nodeEls[n.id] = { g, rect };
+      }
+
+      function layoutNodes() {
+        for (const n of NODES) nodeEls[n.id].g.setAttribute('transform', `translate(${n.x},${n.y})`);
+      }
+      layoutNodes();
+      layoutEdges();
+
+      // --- Highlight bei Hover ---
+      const neighbors = {};
+      for (const e of EDGES) {
+        (neighbors[e.s] = neighbors[e.s] || new Set()).add(e.t);
+        (neighbors[e.t] = neighbors[e.t] || new Set()).add(e.s);
+      }
+      function highlight(id) {
+        for (const n of NODES) {
+          const on = id === null || id === n.id || (neighbors[id] && neighbors[id].has(n.id));
+          nodeEls[n.id].g.classList.toggle('dim', id !== null && !on);
+        }
+        for (const { e, path, label } of edgeEls) {
+          const inc = e.s === id || e.t === id;
+          path.classList.toggle('hl', id !== null && inc);
+          path.classList.toggle('dim', id !== null && !inc);
+          if (label) label.classList.toggle('hl', id !== null && inc);
+        }
+      }
+
+      // --- Detail-Panel ---
+      const panel = document.getElementById('panel');
+      function showPanel(n) {
+        document.getElementById('p-title').textContent = n.title;
+        const tag = document.getElementById('p-tag');
+        tag.textContent = CATS[n.cat].label;
+        tag.style.background = CATS[n.cat].color + '33';
+        tag.style.color = CATS[n.cat].color;
+        document.getElementById('p-desc').textContent = n.desc;
+        const f = document.getElementById('p-file');
+        f.innerHTML = n.file ? '<code>' + n.file + '</code>' : '';
+        panel.classList.add('show');
+      }
+
+      // --- Drag von Knoten ---
+      let drag = null;
+      function svgPoint(evt) {
+        const r = svg.getBoundingClientRect();
+        return {
+          x: vb.x + ((evt.clientX - r.left) / r.width) * vb.w,
+          y: vb.y + ((evt.clientY - r.top) / r.height) * vb.h,
+        };
+      }
+      for (const n of NODES) {
+        const { g } = nodeEls[n.id];
+        g.addEventListener('mouseenter', () => highlight(n.id));
+        g.addEventListener('mouseleave', () => highlight(null));
+        g.addEventListener('mousedown', (evt) => {
+          evt.stopPropagation();
+          const p = svgPoint(evt);
+          drag = { n, dx: p.x - n.x, dy: p.y - n.y, moved: false };
+        });
+        g.addEventListener('click', (evt) => {
+          evt.stopPropagation();
+          if (!drag || !drag.moved) showPanel(n);
+        });
+      }
+
+      // --- Pan des Hintergrunds ---
+      let pan = null;
+      svg.addEventListener('mousedown', (evt) => {
+        pan = { x: evt.clientX, y: evt.clientY, vx: vb.x, vy: vb.y };
+        svg.classList.add('panning');
+      });
+      window.addEventListener('mousemove', (evt) => {
+        if (drag) {
+          const p = svgPoint(evt);
+          drag.n.x = p.x - drag.dx;
+          drag.n.y = p.y - drag.dy;
+          drag.moved = true;
+          nodeEls[drag.n.id].g.setAttribute('transform', `translate(${drag.n.x},${drag.n.y})`);
+          layoutEdges();
+        } else if (pan) {
+          const r = svg.getBoundingClientRect();
+          vb.x = pan.vx - ((evt.clientX - pan.x) / r.width) * vb.w;
+          vb.y = pan.vy - ((evt.clientY - pan.y) / r.height) * vb.h;
+          applyVB();
+        }
+      });
+      window.addEventListener('mouseup', () => { drag = null; pan = null; svg.classList.remove('panning'); });
+
+      // --- Zoom ---
+      svg.addEventListener('wheel', (evt) => {
+        evt.preventDefault();
+        const p = svgPoint(evt);
+        const factor = evt.deltaY > 0 ? 1.1 : 0.9;
+        vb.w *= factor; vb.h *= factor;
+        vb.x = p.x - ((p.x - vb.x) * factor);
+        vb.y = p.y - ((p.y - vb.y) * factor);
+        applyVB();
+      }, { passive: false });
+
+      svg.addEventListener('dblclick', () => { vb = { x: 0, y: 110, w: 1060, h: 800 }; applyVB(); });
+
+      // --- Legende (Kategorie-Filter) ---
+      const legend = document.getElementById('legend');
+      const hidden = new Set();
+      for (const [key, cat] of Object.entries(CATS)) {
+        const chip = document.createElement('span');
+        chip.className = 'chip';
+        chip.innerHTML = `<span class="dot" style="background:${cat.color}"></span>${cat.label}`;
+        chip.onclick = () => {
+          if (hidden.has(key)) hidden.delete(key); else hidden.add(key);
+          chip.classList.toggle('off', hidden.has(key));
+          for (const n of NODES) nodeEls[n.id].g.style.display = hidden.has(n.cat) ? 'none' : '';
+          for (const { e, path, label } of edgeEls) {
+            const off = hidden.has(nodeById[e.s].cat) || hidden.has(nodeById[e.t].cat);
+            path.style.display = off ? 'none' : '';
+            if (label) label.style.display = off ? 'none' : '';
+          }
+        };
+        legend.appendChild(chip);
+      }
+    </script>
+  </body>
+</html>
