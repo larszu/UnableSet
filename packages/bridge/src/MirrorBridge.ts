@@ -98,6 +98,7 @@ export class MirrorBridge extends EventEmitter<AbletonBridgeEvents> implements A
     this.primary.on('status', (status) => this.emit('status', status));
     this.primary.on('transport', (transport) => this.emit('transport', transport));
     this.primary.on('cuePoints', (cuePoints) => this.emit('cuePoints', cuePoints));
+    this.primary.on('lyricLines', (lines) => this.emit('lyricLines', lines));
     this.primary.on('songLength', (length) => this.emit('songLength', length));
     this.primary.on('tracks', (tracks) => this.emit('tracks', tracks));
     this.primary.on('bridgeError', (error) => this.emit('bridgeError', error));
@@ -241,6 +242,10 @@ export class MirrorBridge extends EventEmitter<AbletonBridgeEvents> implements A
 
   refreshCuePoints(): Promise<CuePoint[]> {
     return this.primary.refreshCuePoints();
+  }
+
+  refreshLyricLines(): Promise<CuePoint[]> {
+    return this.primary.refreshLyricLines();
   }
 
   refreshTracks(): Promise<TrackInfo[]> {

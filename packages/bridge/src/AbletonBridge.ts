@@ -23,6 +23,8 @@ export interface AbletonBridgeEvents {
   transport: [BridgeTransport];
   /** Cue-Point-Liste wurde (neu) gelesen. */
   cuePoints: [CuePoint[]];
+  /** Lyric-Zeilen (Clips auf „Lyrics…"-Tracks) wurden (neu) gelesen. */
+  lyricLines: [CuePoint[]];
   /** Arrangement-Länge in Beats wurde gelesen. */
   songLength: [number];
   /** Track-Liste (Mixer) wurde (neu) gelesen. */
@@ -44,6 +46,11 @@ export interface AbletonBridge extends EventEmitter<AbletonBridgeEvents> {
   getCuePoints(): CuePoint[];
   /** Cue Points neu aus Live lesen; emittiert zusätzlich `cuePoints`. */
   refreshCuePoints(): Promise<CuePoint[]>;
+  /**
+   * Lyric-Zeilen aus Arrangement-Clips auf Tracks lesen, deren Name mit
+   * „Lyrics" beginnt (Clip-Name = Zeile, Clip-Start = Timing).
+   */
+  refreshLyricLines(): Promise<CuePoint[]>;
 
   play(): void;
   stop(): void;

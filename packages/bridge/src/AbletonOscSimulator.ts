@@ -19,6 +19,12 @@ export interface SimulatorTrack {
   solo: boolean;
 }
 
+export interface SimulatorLyricTrack {
+  name: string;
+  /** [Zeile, Startbeat] — Arrangement-Clips auf dem Lyrics-Track. */
+  clips: [string, number][];
+}
+
 export interface AbletonOscSimulatorOptions {
   port: number;
   tempo?: number;
@@ -27,6 +33,7 @@ export interface AbletonOscSimulatorOptions {
   cuePoints?: [string, number][];
   songLengthBeats?: number;
   tracks?: SimulatorTrack[];
+  lyricTracks?: SimulatorLyricTrack[];
   liveVersion?: [number, number];
 }
 
@@ -48,6 +55,7 @@ export class AbletonOscSimulator {
   cuePoints: [string, number][];
   songLengthBeats: number;
   tracks: SimulatorTrack[];
+  lyricTracks: SimulatorLyricTrack[];
 
   isPlaying = false;
   positionBeats = 0;
@@ -66,6 +74,7 @@ export class AbletonOscSimulator {
       cuePoints: options.cuePoints ?? [],
       songLengthBeats: options.songLengthBeats ?? 256,
       tracks: options.tracks ?? [],
+      lyricTracks: options.lyricTracks ?? [],
       liveVersion: options.liveVersion ?? [12, 1],
     };
     this.tempo = this.opts.tempo;
@@ -73,6 +82,10 @@ export class AbletonOscSimulator {
     this.cuePoints = this.opts.cuePoints.map(([name, time]) => [name, time]);
     this.songLengthBeats = this.opts.songLengthBeats;
     this.tracks = this.opts.tracks.map((track) => ({ ...track }));
+    this.lyricTracks = this.opts.lyricTracks.map((track) => ({
+      ...track,
+      clips: track.clips.map(([name, start]) => [name, start] as [string, number]),
+    }));
 
     this.port = new osc.UDPPort({
       localAddress: '127.0.0.1',
@@ -189,6 +202,24 @@ export class AbletonOscSimulator {
       case OSC_ADDR.song.getNumTracks:
         reply(msg.address, [I(this.tracks.length)]);
         break;
+      case OSC_ADDR.song.getTrackNames:
+        reply(msg.address, [
+          ...this.tracks.map((track) => S(track.name)),
+          ...this.lyricTracks.map((track) => S(track.name)),
+        ]);
+        break;
+      case OSC_ADDR.track.getArrangementClips: {
+        const index = arg(0);
+        if (typeof index !== 'number') break;
+        const lyricTrack = this.lyricTracks[index - this.tracks.length];
+        if (lyricTrack) {
+          reply(msg.address, [
+            I(index),
+            ...lyricTrack.clips.flatMap(([name, start]) => [S(name), F(start), F(4)]),
+          ]);
+        }
+        break;
+      }
       case OSC_ADDR.song.getCuePoints:
         reply(
           msg.address,
@@ -358,6 +389,21 @@ export function demoSimulatorOptions(port: number): AbletonOscSimulatorOptions {
       { name: 'Playback R', volume: 0.85, mute: false, solo: false },
       { name: 'Synth Stems', volume: 0.7, mute: false, solo: false },
       { name: 'Timecode', volume: 1.0, mute: false, solo: false },
+    ],
+    lyricTracks: [
+      {
+        name: 'Lyrics',
+        clips: [
+          ['Neonlicht über der leeren Stadt', 0],
+          ['wir fahren weiter, keiner wird müde', 8],
+          ['Und der Himmel reißt auf', 16],
+          ['für einen Moment nur für uns', 24],
+          ['Wir sind das Licht in der Nacht', 48],
+          ['haben den Morgen zum Leuchten gebracht', 56],
+          ['Zweite Strophe beginnt hier', 80],
+          ['und trägt uns durch den Refrain', 96],
+        ],
+      },
     ],
   };
 }

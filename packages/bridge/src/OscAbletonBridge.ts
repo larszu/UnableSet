@@ -212,6 +212,36 @@ export class OscAbletonBridge extends EventEmitter<AbletonBridgeEvents> implemen
     this.send(OSC_ADDR.song.setLoop, [enabled ? 1 : 0]);
   }
 
+  /**
+   * Lyric-Zeilen: Arrangement-Clips aller Tracks, deren Name mit "lyrics"
+   * beginnt. Antwortformate sind tolerant geparst (String + Zeit[, Länge]).
+   */
+  async refreshLyricLines(): Promise<CuePoint[]> {
+    const nameArgs = await this.request(OSC_ADDR.song.getTrackNames).catch(() => []);
+    const lines: CuePoint[] = [];
+    for (let index = 0; index < nameArgs.length; index++) {
+      const trackName = nameArgs[index];
+      if (typeof trackName !== 'string' || !trackName.toLowerCase().startsWith('lyrics')) {
+        continue;
+      }
+      const clipArgs = await this.request(OSC_ADDR.track.getArrangementClips, [index]).catch(
+        () => [] as unknown[],
+      );
+      // Muster: … name(string), start(number)[, länge(number)] …
+      for (let i = 0; i < clipArgs.length; i++) {
+        const name = clipArgs[i];
+        const start = clipArgs[i + 1];
+        if (typeof name === 'string' && typeof start === 'number') {
+          lines.push({ name, timeBeats: start });
+          i += typeof clipArgs[i + 2] === 'number' ? 2 : 1;
+        }
+      }
+    }
+    lines.sort((a, b) => a.timeBeats - b.timeBeats);
+    this.emit('lyricLines', lines);
+    return lines;
+  }
+
   async refreshTracks(): Promise<TrackInfo[]> {
     const numArgs = await this.request(OSC_ADDR.song.getNumTracks);
     const numTracks = typeof numArgs[0] === 'number' ? numArgs[0] : 0;
@@ -326,6 +356,7 @@ export class OscAbletonBridge extends EventEmitter<AbletonBridgeEvents> implemen
       this.queryNumber(OSC_ADDR.song.getCurrentSongTime),
       this.queryNumber(OSC_ADDR.song.getSongLength),
       this.refreshCuePoints().catch(() => undefined),
+      this.refreshLyricLines().catch(() => undefined),
     ]);
   }
 
