@@ -1,0 +1,60 @@
+{
+  "name": "unableset-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Desktop-Huelle fuer den UnableSet-Host (Tray, Fenster, Floating-Window)",
+  "author": "larszu",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder",
+    "dist:mac": "electron-builder --mac --x64 --arm64",
+    "dist:win": "electron-builder --win --x64"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.larszu.unableset",
+    "productName": "UnableSet",
+    "copyright": "Copyright larszu",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.cjs",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../../packages/server/dist-bundle",
+        "to": "server"
+      },
+      {
+        "from": "../../packages/client/dist",
+        "to": "client/dist"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.music",
+      "target": [
+        { "target": "dmg", "arch": ["x64", "arm64"] },
+        { "target": "zip", "arch": ["x64", "arm64"] }
+      ],
+      "icon": "build/icon.png"
+    },
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

@@ -5,7 +5,7 @@
  */
 
 import type { EventEmitter } from 'node:events';
-import type { BridgeStatus, CuePoint } from '@unableset/shared';
+import type { BridgeStatus, CuePoint, MirrorTargetStatus, TrackInfo } from '@unableset/shared';
 
 /** Roh-Transportdaten, wie die Bridge sie aus Live liest. */
 export interface BridgeTransport {
@@ -23,8 +23,14 @@ export interface AbletonBridgeEvents {
   transport: [BridgeTransport];
   /** Cue-Point-Liste wurde (neu) gelesen. */
   cuePoints: [CuePoint[]];
+  /** Lyric-Zeilen (Clips auf „Lyrics…"-Tracks) wurden (neu) gelesen. */
+  lyricLines: [CuePoint[]];
   /** Arrangement-Länge in Beats wurde gelesen. */
   songLength: [number];
+  /** Track-Liste (Mixer) wurde (neu) gelesen. */
+  tracks: [TrackInfo[]];
+  /** Status gespiegelter Backup-Rigs (nur MirrorBridge, M6). */
+  mirrors: [MirrorTargetStatus[]];
   /** Nicht-fataler Fehler (nur Logging — die Show läuft weiter). */
   bridgeError: [Error];
 }
@@ -36,11 +42,31 @@ export interface AbletonBridge extends EventEmitter<AbletonBridgeEvents> {
   disconnect(): Promise<void>;
   getStatus(): BridgeStatus;
   getTransport(): BridgeTransport;
+  /** Zuletzt gelesene Cue-Point-Liste (Index-Basis für jumpToCuePoint). */
+  getCuePoints(): CuePoint[];
   /** Cue Points neu aus Live lesen; emittiert zusätzlich `cuePoints`. */
   refreshCuePoints(): Promise<CuePoint[]>;
+  /**
+   * Lyric-Zeilen aus Arrangement-Clips auf Tracks lesen, deren Name mit
+   * „Lyrics" beginnt (Clip-Name = Zeile, Clip-Start = Timing).
+   */
+  refreshLyricLines(): Promise<CuePoint[]>;
+
   play(): void;
   stop(): void;
   continuePlayback(): void;
   /** Springt auf einen Cue Point (Index in der zuletzt gelesenen Liste). */
   jumpToCuePoint(index: number): void;
+  /** Setzt die Song-Position (Beats) — Basis aller Setlist-Jumps. */
+  setSongPosition(beats: number): void;
+
+  /** Ableton-Loop-Bracket setzen/aktivieren (für Section-Loops). */
+  setLoop(startBeats: number, lengthBeats: number, enabled: boolean): void;
+  setLoopEnabled(enabled: boolean): void;
+
+  /** Mixer: Tracks neu aus Live lesen; emittiert zusätzlich `tracks`. */
+  refreshTracks(): Promise<TrackInfo[]>;
+  setTrackVolume(trackIndex: number, volume: number): void;
+  setTrackMute(trackIndex: number, mute: boolean): void;
+  setTrackSolo(trackIndex: number, solo: boolean): void;
 }

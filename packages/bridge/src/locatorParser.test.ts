@@ -66,6 +66,24 @@ describe('parseLocatorName', () => {
     expect(parseLocatorName('+LOOP:2').kind).toBe('ignored');
   });
 
+  it('>Prefix markiert eine Section', () => {
+    const parsed = parseLocatorName('>Chorus');
+    expect(parsed.kind).toBe('section');
+    expect(parsed.title).toBe('Chorus');
+  });
+
+  it('Section mit Flags und Beschreibung', () => {
+    const parsed = parseLocatorName('> Drop {mit FX} +LOOP:4');
+    expect(parsed.kind).toBe('section');
+    expect(parsed.title).toBe('Drop');
+    expect(parsed.description).toBe('mit FX');
+    expect(parsed.flags.get('LOOP')).toBe('4');
+  });
+
+  it('Section namens "Stop" bleibt Section (kein Marker)', () => {
+    expect(parseLocatorName('>Stop').kind).toBe('section');
+  });
+
   it('Whitespace wird normalisiert', () => {
     const parsed = parseLocatorName('  My   Song   {  viel   Platz  } ');
     expect(parsed.title).toBe('My Song');

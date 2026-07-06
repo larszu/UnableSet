@@ -80,6 +80,57 @@ describe('buildSongsFromCuePoints', () => {
   });
 });
 
+describe('buildSongsFromCuePoints – Sections', () => {
+  it('>Locators werden dem umschließenden Song als Sections zugeordnet', () => {
+    const songs = buildSongsFromCuePoints(
+      [
+        cue('Song A', 0),
+        cue('>Verse', 0),
+        cue('>Chorus', 16),
+        cue('Song B', 64),
+      ],
+      128,
+    );
+    expect(songs).toHaveLength(2);
+    expect(songs[0].sections.map((s) => [s.name, s.startBeat, s.lengthBeats])).toEqual([
+      ['Verse', 0, 16],
+      ['Chorus', 16, 48],
+    ]);
+    expect(songs[1].sections).toEqual([]);
+  });
+
+  it('implizite Anfangs-Section, wenn die erste Section später beginnt', () => {
+    const songs = buildSongsFromCuePoints([cue('Song A', 0), cue('>Drop', 32)], 64);
+    expect(songs[0].sections.map((s) => [s.name, s.startBeat, s.lengthBeats])).toEqual([
+      ['Song A', 0, 32],
+      ['Drop', 32, 32],
+    ]);
+  });
+
+  it('Sections beeinflussen die Songlänge nicht', () => {
+    const songs = buildSongsFromCuePoints(
+      [cue('Song A', 0), cue('>Bridge', 32), cue('Song B', 64)],
+      128,
+    );
+    expect(songs[0].lengthBeats).toBe(64);
+  });
+
+  it('+LOOP:n auf einer Section erzeugt Loop-Metadaten', () => {
+    const songs = buildSongsFromCuePoints([cue('Song A', 0), cue('>Drop +LOOP:4', 16)], 64);
+    const drop = songs[0].sections.find((s) => s.name === 'Drop');
+    expect(drop?.loop).toEqual({ enabled: false, count: 4, mode: 'standard' });
+  });
+
+  it('Section-IDs sind eindeutig und stabil pro Song', () => {
+    const songs = buildSongsFromCuePoints(
+      [cue('Song A', 0), cue('>X', 0), cue('>Y', 8)],
+      64,
+    );
+    const ids = songs[0].sections.map((s) => s.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
 describe('songIdFor', () => {
   it('erzeugt stabile, lesbare IDs', () => {
     expect(songIdFor('Highway Star', 64)).toBe('highway-star@64');

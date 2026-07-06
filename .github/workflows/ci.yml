@@ -32,3 +32,9 @@ jobs:
 
       - name: Tests
         run: pnpm test
+
+      - name: Playwright-Browser installieren
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E-Tests (headless)
+        run: pnpm test:e2e

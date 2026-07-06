@@ -1,0 +1,85 @@
+name: Release-Builds
+
+# Baut die Desktop-App bei jedem veröffentlichten Release und hängt die
+# Installer als Assets an:
+#   - macOS: DMG + ZIP für Apple Silicon (arm64) UND Intel (x64)
+#   - Windows: NSIS-Installer + Portable (x64)
+#
+# Manuell testbar über "Run workflow" (workflow_dispatch) — dann werden die
+# Artefakte als Build-Artifacts hochgeladen statt an ein Release gehängt.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: mac
+            artifact: unableset-macos
+          - os: windows-latest
+            platform: win
+            artifact: unableset-windows
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Dependencies installieren
+        run: pnpm install --frozen-lockfile
+
+      - name: Client/Server bauen, Server bündeln, Icons erzeugen
+        run: pnpm dist:desktop
+
+      - name: Electron-Deps installieren (apps/desktop, ausserhalb Workspace)
+        working-directory: apps/desktop
+        run: npm install
+
+      - name: macOS-Build (arm64 + x64)
+        if: matrix.platform == 'mac'
+        working-directory: apps/desktop
+        run: npm run dist:mac
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Kein Code-Signing/Notarisierung in CI (keine Zertifikate hinterlegt)
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Windows-Build (x64)
+        if: matrix.platform == 'win'
+        working-directory: apps/desktop
+        run: npm run dist:win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Installer als Build-Artefakt hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.zip
+            apps/desktop/release/*.exe
+          if-no-files-found: warn
+
+      - name: Installer an das Release anhängen
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.zip
+            apps/desktop/release/*.exe

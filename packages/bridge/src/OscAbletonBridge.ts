@@ -11,7 +11,7 @@
 
 import { EventEmitter } from 'node:events';
 import osc from 'osc';
-import type { OscPacket, OscTypedArg, UDPPort } from 'osc';
+import type { OscPacket, UDPPort } from 'osc';
 import {
   ABLETON_OSC_DEFAULT_RECEIVE_PORT,
   ABLETON_OSC_DEFAULT_SEND_PORT,
@@ -21,8 +21,10 @@ import {
   oscStopListen,
   type BridgeStatus,
   type CuePoint,
+  type TrackInfo,
 } from '@unableset/shared';
 import type { AbletonBridge, AbletonBridgeEvents, BridgeTransport } from './AbletonBridge.js';
+import { toTypedOscArgs } from './oscArgs.js';
 
 export interface OscAbletonBridgeOptions {
   /** Adresse des Rechners, auf dem Live läuft. */
@@ -45,16 +47,6 @@ export interface OscAbletonBridgeOptions {
 interface PendingRequest {
   resolve: (args: unknown[]) => void;
   timer: NodeJS.Timeout;
-}
-
-function toTypedArgs(args: (number | string)[]): OscTypedArg[] {
-  return args.map((value) =>
-    typeof value === 'string'
-      ? { type: 's', value }
-      : Number.isInteger(value)
-        ? { type: 'i', value }
-        : { type: 'f', value },
-  );
 }
 
 function argValues(packet: OscPacket): unknown[] {
@@ -201,6 +193,102 @@ export class OscAbletonBridge extends EventEmitter<AbletonBridgeEvents> implemen
     this.send(OSC_ADDR.song.cuePointJump, [index]);
   }
 
+  setSongPosition(beats: number): void {
+    // Explizit als Float senden (Ganzzahlen würden sonst als 'i' kodiert)
+    this.sendFloat(OSC_ADDR.song.setCurrentSongTime, beats);
+    // Lokalen Zustand sofort nachziehen, damit Grenz-Checks nicht doppelt feuern
+    this.transport.positionBeats = beats;
+    this.emitTransport();
+    this.send(OSC_ADDR.song.getCurrentSongTime);
+  }
+
+  setLoop(startBeats: number, lengthBeats: number, enabled: boolean): void {
+    this.sendFloat(OSC_ADDR.song.setLoopStart, startBeats);
+    this.sendFloat(OSC_ADDR.song.setLoopLength, lengthBeats);
+    this.send(OSC_ADDR.song.setLoop, [enabled ? 1 : 0]);
+  }
+
+  setLoopEnabled(enabled: boolean): void {
+    this.send(OSC_ADDR.song.setLoop, [enabled ? 1 : 0]);
+  }
+
+  /**
+   * Lyric-Zeilen: Arrangement-Clips aller Tracks, deren Name mit "lyrics"
+   * beginnt. Antwortformate sind tolerant geparst (String + Zeit[, Länge]).
+   */
+  async refreshLyricLines(): Promise<CuePoint[]> {
+    const nameArgs = await this.request(OSC_ADDR.song.getTrackNames).catch(() => []);
+    const lines: CuePoint[] = [];
+    for (let index = 0; index < nameArgs.length; index++) {
+      const trackName = nameArgs[index];
+      if (typeof trackName !== 'string' || !trackName.toLowerCase().startsWith('lyrics')) {
+        continue;
+      }
+      const clipArgs = await this.request(OSC_ADDR.track.getArrangementClips, [index]).catch(
+        () => [] as unknown[],
+      );
+      // Muster: … name(string), start(number)[, länge(number)] …
+      for (let i = 0; i < clipArgs.length; i++) {
+        const name = clipArgs[i];
+        const start = clipArgs[i + 1];
+        if (typeof name === 'string' && typeof start === 'number') {
+          lines.push({ name, timeBeats: start });
+          i += typeof clipArgs[i + 2] === 'number' ? 2 : 1;
+        }
+      }
+    }
+    lines.sort((a, b) => a.timeBeats - b.timeBeats);
+    this.emit('lyricLines', lines);
+    return lines;
+  }
+
+  async refreshTracks(): Promise<TrackInfo[]> {
+    const numArgs = await this.request(OSC_ADDR.song.getNumTracks);
+    const numTracks = typeof numArgs[0] === 'number' ? numArgs[0] : 0;
+    const tracks: TrackInfo[] = [];
+    for (let i = 0; i < numTracks; i++) {
+      // Antworten tragen [trackIndex, wert] — sequenziell abfragen, defensiv parsen
+      const [nameArgs, volumeArgs, muteArgs, soloArgs] = [
+        await this.request(OSC_ADDR.track.getName, [i]).catch(() => []),
+        await this.request(OSC_ADDR.track.getVolume, [i]).catch(() => []),
+        await this.request(OSC_ADDR.track.getMute, [i]).catch(() => []),
+        await this.request(OSC_ADDR.track.getSolo, [i]).catch(() => []),
+      ];
+      tracks.push({
+        index: i,
+        name: typeof nameArgs[1] === 'string' ? nameArgs[1] : `Track ${i + 1}`,
+        volume: typeof volumeArgs[1] === 'number' ? volumeArgs[1] : 0.85,
+        mute: muteArgs[1] === 1 || muteArgs[1] === true,
+        solo: soloArgs[1] === 1 || soloArgs[1] === true,
+      });
+    }
+    this.emit('tracks', tracks);
+    return tracks;
+  }
+
+  setTrackVolume(trackIndex: number, volume: number): void {
+    if (!this.port || !this.portReady) return;
+    try {
+      this.port.send({
+        address: OSC_ADDR.track.setVolume,
+        args: [
+          { type: 'i', value: trackIndex },
+          { type: 'f', value: Math.min(1, Math.max(0, volume)) },
+        ],
+      });
+    } catch (error) {
+      this.emit('bridgeError', error instanceof Error ? error : new Error(String(error)));
+    }
+  }
+
+  setTrackMute(trackIndex: number, mute: boolean): void {
+    this.send(OSC_ADDR.track.setMute, [trackIndex, mute ? 1 : 0]);
+  }
+
+  setTrackSolo(trackIndex: number, solo: boolean): void {
+    this.send(OSC_ADDR.track.setSolo, [trackIndex, solo ? 1 : 0]);
+  }
+
   async refreshCuePoints(): Promise<CuePoint[]> {
     const args = await this.request(OSC_ADDR.song.getCuePoints);
     const cuePoints: CuePoint[] = [];
@@ -268,6 +356,7 @@ export class OscAbletonBridge extends EventEmitter<AbletonBridgeEvents> implemen
       this.queryNumber(OSC_ADDR.song.getCurrentSongTime),
       this.queryNumber(OSC_ADDR.song.getSongLength),
       this.refreshCuePoints().catch(() => undefined),
+      this.refreshLyricLines().catch(() => undefined),
     ]);
   }
 
@@ -301,7 +390,17 @@ export class OscAbletonBridge extends EventEmitter<AbletonBridgeEvents> implemen
   private send(address: string, args: (number | string)[] = []): void {
     if (!this.port || !this.portReady) return;
     try {
-      this.port.send({ address, args: toTypedArgs(args) });
+      this.port.send({ address, args: toTypedOscArgs(args) });
+    } catch (error) {
+      this.emit('bridgeError', error instanceof Error ? error : new Error(String(error)));
+    }
+  }
+
+  /** Sendet einen einzelnen Wert erzwungen als OSC-Float. */
+  private sendFloat(address: string, value: number): void {
+    if (!this.port || !this.portReady) return;
+    try {
+      this.port.send({ address, args: [{ type: 'f', value }] });
     } catch (error) {
       this.emit('bridgeError', error instanceof Error ? error : new Error(String(error)));
     }

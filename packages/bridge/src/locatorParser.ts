@@ -1,11 +1,11 @@
 /**
  * Parser für die Locator-Notation (Cue-Point-Namen), siehe PROTOCOL.md §3.
  *
- * Unterstützt: `Titel {Beschreibung}`, `*ignorieren`, `SONG END`, `STOP`
- * sowie generische `+FLAG` / `+FLAG:VALUE`-Tokens (z. B. `+LOOP:4`, `+STOP`).
+ * Unterstützt: `Titel {Beschreibung}`, `*ignorieren`, `>Section`, `SONG END`,
+ * `STOP` sowie generische `+FLAG` / `+FLAG:VALUE`-Tokens (z. B. `+LOOP:4`).
  */
 
-export type LocatorKind = 'song' | 'songEnd' | 'stop' | 'ignored';
+export type LocatorKind = 'song' | 'section' | 'songEnd' | 'stop' | 'ignored';
 
 export interface ParsedLocator {
   kind: LocatorKind;
@@ -24,11 +24,18 @@ function collapseWhitespace(value: string): string {
 }
 
 export function parseLocatorName(rawName: string): ParsedLocator {
-  const name = rawName.trim();
+  let name = rawName.trim();
   const flags = new Map<string, string | true>();
 
   if (name.startsWith('*')) {
     return { kind: 'ignored', title: '', flags };
+  }
+
+  // ">Name" markiert eine Section innerhalb des laufenden Songs
+  let isSection = false;
+  if (name.startsWith('>')) {
+    isSection = true;
+    name = name.slice(1).trim();
   }
 
   // Beschreibung(en) extrahieren und aus dem Titel entfernen
@@ -53,10 +60,10 @@ export function parseLocatorName(rawName: string): ParsedLocator {
   const title = collapseWhitespace(withoutFlags);
   const upper = title.toUpperCase();
 
-  if (upper === 'SONG END') {
+  if (!isSection && upper === 'SONG END') {
     return { kind: 'songEnd', title: '', flags };
   }
-  if (upper === 'STOP') {
+  if (!isSection && upper === 'STOP') {
     return { kind: 'stop', title: '', flags };
   }
   if (title.length === 0) {
@@ -64,7 +71,7 @@ export function parseLocatorName(rawName: string): ParsedLocator {
     return { kind: 'ignored', title: '', flags };
   }
 
-  const result: ParsedLocator = { kind: 'song', title, flags };
+  const result: ParsedLocator = { kind: isSection ? 'section' : 'song', title, flags };
   if (description !== undefined) result.description = description;
   return result;
 }

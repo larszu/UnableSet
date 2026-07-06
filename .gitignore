@@ -6,3 +6,8 @@ release/
 .eslintcache
 coverage/
 *.tsbuildinfo
+test-results/
+playwright-report/
+unableset-data/
+dist-bundle/
+apps/desktop/release/

@@ -10,23 +10,33 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild"
-    ]
+    ],
+    "overrides": {
+      "ws@>=8.0.0 <8.21.0": "^8.21.0"
+    }
   },
   "scripts": {
     "dev": "concurrently -n shared,server,client -c blue,green,magenta \"pnpm --filter @unableset/shared dev\" \"pnpm --filter @unableset/bridge dev\" \"pnpm --filter @unableset/server dev\" \"pnpm --filter @unableset/client dev\"",
     "build": "pnpm -r build",
     "lint": "eslint .",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test"
+    "test": "pnpm -r test",
+    "test:e2e": "playwright test",
+    "simulator": "node packages/bridge/dist/simulator-cli.js",
+    "screenshots": "node scripts/screenshots.mjs",
+    "bundle:server": "node scripts/bundle-server.mjs",
+    "dist:desktop": "pnpm build && pnpm bundle:server"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.4",
-    "concurrently": "^9.1.2",
-    "eslint": "^9.39.4",
-    "eslint-plugin-react-hooks": "^5.2.0",
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.61.1",
+    "concurrently": "^10.0.3",
+    "esbuild": "^0.25.0",
+    "eslint": "^10.6.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.3",
-    "globals": "^16.5.0",
-    "typescript": "~5.9.3",
+    "globals": "^17.7.0",
+    "typescript": "~6.0.3",
     "typescript-eslint": "^8.62.1"
   }
 }
