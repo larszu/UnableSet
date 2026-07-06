@@ -91,6 +91,29 @@ test('Mixer: Tracks sichtbar, Mute togglet', async ({ page }) => {
   await expect(muteButton).toHaveClass(/stage-danger/, { timeout: 5000 });
 });
 
+test('Lyrics-Sync: getimte Zeilen aus MIDI-Clips im Teleprompter', async ({ page }) => {
+  await page.goto('/');
+  await page.getByTestId('btn-stop').click();
+  await page.getByTestId('tab-setlist').click();
+  await page.getByTestId('entry-queue-0').click(); // Neonlicht (hat Lyrics-Track im Simulator)
+
+  await page.getByTestId('tab-lyrics').click();
+  await expect(page.getByTestId('lyrics-view')).toContainText('SYNC');
+  await expect(page.getByTestId('lyrics-view')).toContainText('Neonlicht über der leeren Stadt');
+});
+
+test('Canvas: Command-Button feuert Transport', async ({ page }) => {
+  await page.goto('/');
+  await page.getByTestId('btn-stop').click();
+  await page.getByTestId('tab-canvas').click();
+  await expect(page.getByTestId('canvas-view')).toBeVisible();
+  // Default-Layout enthält einen Play-Button
+  await page.getByRole('button', { name: '▶ Play' }).first().click();
+  await page.getByTestId('tab-performance').click();
+  await expect(page.getByText('PLAYING')).toBeVisible();
+  await page.getByTestId('btn-stop').click();
+});
+
 test('Sperre: Steuerung deaktiviert, Ansicht bleibt', async ({ page }) => {
   await page.goto('/');
   await page.getByTestId('lock-toggle').click();

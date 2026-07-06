@@ -147,7 +147,11 @@ try {
   await page.getByTestId('mixer-refresh').click();
   await shot('mixer.png');
 
-  // 5) Settings
+  // 5) Canvas (eigene Steuer-Oberfläche)
+  await page.getByTestId('tab-canvas').click();
+  await shot('canvas.png');
+
+  // 6) Settings
   await page.getByTestId('tab-settings').click();
   await shot('settings.png');
 
