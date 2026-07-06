@@ -32,6 +32,7 @@ import { OscOut, type OscOutTarget } from './oscOut.js';
 import { OSC_OUT } from '@unableset/shared';
 import { MidiManager } from './midiMapping.js';
 import { readJsonWithBackup } from './util/atomicWrite.js';
+import { AblesetCompatServer } from './ablesetCompat.js';
 
 export interface HostAppOptions {
   bridge: AbletonBridge;
@@ -42,6 +43,8 @@ export interface HostAppOptions {
   dataDir?: string;
   /** Ziele für den OSC-Out-Feed (Floor-Displays, Licht, Video). */
   oscOutTargets?: OscOutTarget[];
+  /** UDP-Port für die AbleSet-Companion-Kompatibilität (0 = aus). */
+  ablesetPort?: number;
   log?: (message: string) => void;
 }
 
@@ -220,6 +223,12 @@ export function createHostApp(options: HostAppOptions): HostApp {
   );
   clock.start();
 
+  // --- AbleSet-Companion-Kompatibilität (OSC, Port 39051) -----------------------
+  const ablesetCompat =
+    options.ablesetPort && options.ablesetPort > 0
+      ? new AblesetCompatServer(store, engine, bridge, { port: options.ablesetPort, log })
+      : null;
+
   // --- MIDI (Learn-Modus; Hardware optional) ------------------------------------
   const remoteAction = (action: string) => {
     switch (action) {
@@ -306,7 +315,12 @@ export function createHostApp(options: HostAppOptions): HostApp {
       });
       if (Array.isArray(settings.clockRules)) store.setClockRules(settings.clockRules);
     }
-  })();
+  })().then(async () => {
+    // Nach dem Laden des Zustands: AbleSet-Kompatibilitäts-Server öffnen
+    await ablesetCompat?.open().catch((error: Error) => {
+      log(`AbleSet-Kompatibilität nicht verfügbar: ${error.message}`);
+    });
+  });
 
   // --- Client-Kommandos ---------------------------------------------------------
   const timeSig = () => store.getTransport().timeSig;
@@ -641,6 +655,7 @@ export function createHostApp(options: HostAppOptions): HostApp {
     close: async () => {
       clock.stop();
       midi?.stop();
+      ablesetCompat?.close();
       oscOut.close();
       store.off('broadcast', broadcast);
       for (const client of wss.clients) client.terminate();

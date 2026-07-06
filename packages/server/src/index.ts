@@ -60,6 +60,7 @@ const appOptions: Parameters<typeof createHostApp>[0] = {
   serverVersion: readServerVersion(),
   dataDir,
   oscOutTargets: config.oscOutTargets,
+  ablesetPort: config.ablesetPort,
   log,
 };
 if (clientDistPath) appOptions.clientDistPath = clientDistPath;
@@ -105,6 +106,11 @@ void app.ready.then(async () => {
   });
 
   if (config.mdns) stopMdns = await startMdns(config.httpPort, log);
+  if (config.ablesetPort > 0) {
+    log(
+      `AbleSet-Companion-Kompatibilität: bestehendes Modul 'companion-module-leolabs-ableset' auf UDP :${config.ablesetPort} richten`,
+    );
+  }
   if (config.mirrorTargets.length > 0) {
     log(
       `Redundanz aktiv: spiegele Kommandos an ${config.mirrorTargets

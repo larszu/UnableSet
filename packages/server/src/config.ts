@@ -20,6 +20,8 @@ export interface HostConfig {
   oscOutTargets: { address: string; port: number }[];
   /** mDNS-Advertising des Hosts. */
   mdns: boolean;
+  /** UDP-Port der AbleSet-Companion-Kompatibilität (0 = aus). */
+  ablesetPort: number;
 }
 
 export const DEFAULT_HTTP_PORT = 4400;
@@ -37,6 +39,7 @@ export function parseConfig(argv: string[]): HostConfig {
       mirror: { type: 'string' },
       'osc-out': { type: 'string' },
       'no-mdns': { type: 'boolean' },
+      'ableset-port': { type: 'string' },
     },
     strict: false,
   });
@@ -56,5 +59,6 @@ export function parseConfig(argv: string[]): HostConfig {
     mirrorTargets: parseHostPortList(typeof values.mirror === 'string' ? values.mirror : ''),
     oscOutTargets: parseHostPortList(typeof values['osc-out'] === 'string' ? values['osc-out'] : ''),
     mdns: values['no-mdns'] !== true,
+    ablesetPort: toPort(values['ableset-port'], 39051),
   };
 }
