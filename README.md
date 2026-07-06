@@ -24,12 +24,17 @@ Setlist — **ohne die Live-Session anzufassen** und **ohne Internetverbindung**
   bereitet den nächsten Song vor
 - **Section-Loops** über das native Ableton-Loop-Bracket
 - **Views pro Gerät**: Performance (Bühne), Setlist (MD), Lyrics-Teleprompter
-  mit Akkordzeilen + Auto-Scroll, Mixer (Volume/Mute/Solo), Settings — alle
-  sperrbar gegen versehentliche Bedienung
+  (Akkordzeilen + Auto-Scroll, **beat-synchron aus MIDI-Clips**), Mixer
+  (Volume/Mute/Solo), **Canvas** (eigene Steuer-Oberfläche mit Buttons/OSC/
+  sandboxed Scripting), Settings — alle sperrbar gegen versehentliche Bedienung
 - **Anzeige**: Bar/Beat, BPM, Taktart, Timecode, Beat-Flash, Rest im Song,
   Rest im Set, nächster Song
 - **Fernsteuerung**: Tastatur-Shortcuts, OSC-In (TouchOSC / Open Stage
-  Control / **Bitfocus Companion**), MIDI-Mapping (Fußcontroller, optional)
+  Control / **Bitfocus Companion**), MIDI-Mapping mit **Learn-Modus**
+  (Fußcontroller; Hardware optional)
+- **Import**: Plaintext und **CSV/BandHelper-Export** (Titel-Spalte wird
+  automatisch erkannt); **Multi-File-Projekte** (Live-Datei pro Song, direkt
+  aus der App öffnen)
 - **OSC-Out-Feed** an Floor-Displays/Licht/Video (herstellerneutral) +
   `oscOnEnter`-Befehle pro Song (z. B. Licht-Preset beim Songstart)
 - **Redundanz (M6)**: `--mirror` spiegelt alle Kommandos an Backup-Rigs,
@@ -46,11 +51,13 @@ Setlist — **ohne die Live-Session anzufassen** und **ohne Internetverbindung**
 |---|---|
 | ![Setlist](docs/screenshots/setlist.png) | ![Lyrics](docs/screenshots/lyrics.png) |
 
-| Mixer | Settings |
+| Mixer | Settings (MIDI-Learn, Redundanz, QR) |
 |---|---|
 | ![Mixer](docs/screenshots/mixer.png) | ![Settings](docs/screenshots/settings.png) |
 
-<img src="docs/screenshots/performance-mobile.png" alt="Performance auf dem Smartphone" width="300" />
+| Canvas (eigene Steuer-Oberfläche + Scripting) | Performance (Smartphone) |
+|---|---|
+| ![Canvas](docs/screenshots/canvas.png) | <img src="docs/screenshots/performance-mobile.png" alt="Performance auf dem Smartphone" width="280" /> |
 
 ## Architektur
 
@@ -62,9 +69,12 @@ Ableton Live  ←OSC/UDP→  Host (Node/TS)  ←WebSocket→  Clients (Browser/P
 
 - `packages/shared` — Datenmodell, WS-Protokoll, OSC-Adressen, Jump-/Beat-Mathematik ([PROTOCOL.md](packages/shared/PROTOCOL.md))
 - `packages/bridge` — Ableton-Anbindung hinter dem `AbletonBridge`-Interface;
-  Weg A: OSC via [AbletonOSC](https://github.com/ideoforms/AbletonOSC);
-  Weg B (später): Max for Live, beat-genau. Enthält zusätzlich einen
-  **AbletonOSC-Simulator** für Entwicklung/Tests ohne Live.
+  **Weg A**: OSC via [AbletonOSC](https://github.com/ideoforms/AbletonOSC);
+  **Weg B**: Max-for-Live-Device (`packages/bridge/m4l/`, beat-genaue 20-ms-
+  Position). Enthält zusätzlich einen **AbletonOSC-Simulator** für
+  Entwicklung/Tests ohne Live und die `MirrorBridge` für Redundanz.
+- `apps/desktop` — optionale **Electron-Hülle** (Tray, Auto-Start,
+  Floating-Window, Watchdog); der Host läuft auch komplett ohne Electron.
 - `packages/server` — Host: Setlist-Engine, State-Store, WebSocket-Broadcast,
   REST, OSC-Remote, Clock-Scheduler, atomare JSON-Persistenz
 - `packages/client` — React-PWA (React 19, Vite, Tailwind 4, Zustand)
@@ -188,12 +198,16 @@ MIDI einfach deaktiviert.
   Safe Mode, Autoplay/STOP, Loops), Persistenz (atomar + Backup), Protokoll-
   Guards, MIDI-Matcher, Clock-Regeln, OSC-Bridge gegen simuliertes AbletonOSC
   (echtes UDP), WebSocket-Roundtrip mit 3 Clients
-- **10 Headless-E2E-Tests** (Playwright, Chromium) gegen den kompletten Stack
+- **12 Headless-E2E-Tests** (Playwright, Chromium) gegen den kompletten Stack
   (Simulator + Host + gebauter Client): Verbinden/Snapshot, Play/Stop,
-  Queue + Jump (stehend/laufend), Sections, Mixer, Sperre,
-  Reorder + Reload-Persistenz, 2000-Cue-Points-Skalierung, PWA-Auslieferung
+  Queue + Jump (stehend/laufend), Sections, Mixer, **Lyrics-Sync**,
+  **Canvas**, Sperre, Reorder + Reload-Persistenz, 2000-Cue-Points-Skalierung,
+  PWA-Auslieferung
 - **M6-Redundanz** unit- und CLI-getestet mit zwei Simulatoren (Spiegelung,
   Drift-Korrektur, Reconnect)
+- **Sicherheit:** `pnpm audit` clean; Host gehärtet (CSP + Security-Header,
+  WS-Payload-Limit + Ratenbegrenzung, sandboxed Scripting, Pfad-Allowlist) —
+  Details in [SECURITY.md](SECURITY.md)
 
 ## Meilenstein-Status
 
@@ -204,9 +218,15 @@ MIDI einfach deaktiviert.
 - [x] **M4** – Lyrics/Views: Teleprompter mit Akkorden + Auto-Scroll, sperrbare Views, Beat-Feedback *(Lyrics-Quelle: Setlist-Overrides; MIDI-Clip-Sync folgt)*
 - [x] **M5** – MIDI/OSC/Mixer: OSC-In/Out, MIDI-Mapping (Datei, Hardware optional), Mixer mit Lock *(MIDI-Learn-UI folgt)*
 - [x] **M6** – Redundanz: Kommando-Spiegelung an Backup-Rigs mit Drift-Messung + Auto-Korrektur (`--mirror`)
-- [x] **M7 (teilweise)** – QR-Code, mDNS, OSC-Floor-Display-Feed; *Canvas/Scripting, Electron-Hülle folgen*
-- [x] **M8 (teilweise)** – Show-Presets (mehrere Setlists), Zwei-Listen-Prinzip, TTS-Ansage, Clock-Aktionen; *Multi-File-Projekte, BandHelper-Import folgen*
-- [x] **M9** – Politur: PWA (Manifest/SW/Wake-Lock/Icons), 2000+-Marker-Skalierung (content-visibility, E2E-getestet)
+- [x] **M7** – QR-Code, mDNS, OSC-Floor-Display-Feed, **Canvas + Scripting-Sandbox**, **Electron-Hülle** (`apps/desktop`)
+- [x] **M8** – Show-Presets, Zwei-Listen-Prinzip, TTS-Ansage, Clock-Aktionen, **CSV/BandHelper-Import**, **Multi-File-Projekte**
+- [x] **M9** – Politur: PWA (Manifest/SW/Wake-Lock/Icons), 2000+-Marker-Skalierung, Sicherheits-Härtung ([SECURITY.md](SECURITY.md)), UX-Audit ([docs/ux-audit.md](docs/ux-audit.md))
+
+**Weg B (Max for Live)** und die **Electron-Hülle** sind funktionsfertig
+implementiert, aber noch nicht gegen echtes Live/Electron verifiziert
+(headless nicht möglich) — Weg A + reiner Server-Prozess bleiben der
+getestete Standard. Siehe [`packages/bridge/m4l/`](packages/bridge/m4l/) und
+[`apps/desktop/`](apps/desktop/).
 
 Details und offene Architektur-Entscheidungen:
 [docs/umsetzungsplan.md](docs/umsetzungsplan.md)
