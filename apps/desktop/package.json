@@ -4,6 +4,11 @@
   "private": true,
   "description": "Desktop-Huelle fuer den UnableSet-Host (Tray, Fenster, Floating-Window)",
   "author": "larszu",
+  "homepage": "https://github.com/larszu/UnableSet",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/larszu/UnableSet.git"
+  },
   "main": "main.cjs",
   "scripts": {
     "start": "electron .",
@@ -19,6 +24,7 @@
     "appId": "com.larszu.unableset",
     "productName": "UnableSet",
     "copyright": "Copyright larszu",
+    "publish": null,
     "directories": {
       "output": "release",
       "buildResources": "build"
