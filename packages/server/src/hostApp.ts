@@ -122,7 +122,10 @@ export function createHostApp(options: HostAppOptions): HostApp {
   });
   bridge.on('transport', (transport) => {
     engine.handleTransportTick(transport);
-    store.applyBridgeTransport(transport);
+    // Ein Sprung im Tick (teleport) hat die Bridge-Position bereits geändert —
+    // deshalb den frischen Zustand anwenden statt des Event-Snapshots, sonst
+    // blitzt in der UI kurz die alte Position auf (Playhead-Zittern).
+    store.applyBridgeTransport(bridge.getTransport());
   });
   bridge.on('cuePoints', (cuePoints) => {
     lastCuePoints = cuePoints;

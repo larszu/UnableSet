@@ -59,6 +59,11 @@ export class AbletonOscSimulator {
 
   isPlaying = false;
   positionBeats = 0;
+  /**
+   * Arrangement-Einfügemarke: start_playing springt (wie in echtem Live)
+   * hierhin — set/current_song_time verschiebt sie NICHT.
+   */
+  insertMarkerBeats = 0;
   loop = { start: 0, length: 4, enabled: false };
 
   private tickTimer: NodeJS.Timeout | null = null;
@@ -229,6 +234,7 @@ export class AbletonOscSimulator {
 
       // --- Song: Transport ---
       case OSC_ADDR.song.startPlaying:
+        this.positionBeats = this.insertMarkerBeats;
         this.setPlaying(true);
         break;
       case OSC_ADDR.song.stopPlaying:

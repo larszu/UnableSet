@@ -163,6 +163,34 @@ describe('OscAbletonBridge (Integration, UDP localhost)', () => {
     expect(simulator.isPlaying).toBe(false);
   });
 
+  it('Play startet am Playhead, nicht an der Arrangement-Einfügemarke', async () => {
+    const { bridge, simulator } = await setup();
+    await bridge.connect();
+    await waitForConnected(bridge);
+
+    // In echtem Live springt start_playing zur Einfügemarke zurück — der
+    // Simulator bildet das nach. Play muss trotzdem am gesetzten Playhead
+    // starten (Locator-Sprung bei stehendem Transport, dann Play).
+    simulator.insertMarkerBeats = 0;
+    bridge.setSongPosition(48);
+    await waitFor<void>((resolve) => {
+      const timer = setInterval(() => {
+        if (simulator.positionBeats === 48) {
+          clearInterval(timer);
+          resolve();
+        }
+      }, 20);
+    });
+
+    bridge.play();
+    await waitFor<void>((resolve) => {
+      bridge.on('transport', (transport) => {
+        if (transport.isPlaying && transport.positionBeats > 48) resolve();
+      });
+    });
+    expect(simulator.positionBeats).toBeGreaterThan(48);
+  });
+
   it('liest und steuert Mixer-Tracks', async () => {
     const { bridge, simulator } = await setup();
     await bridge.connect();

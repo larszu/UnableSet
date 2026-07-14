@@ -102,14 +102,14 @@ quelloffenen MIDI-Remote-Script für Live 11/12. Installation siehe README.
 | `/live/application/get/version` | → / ← | Live-Version für Statusanzeige |
 | `/live/song/get/tempo` | → / ← | Tempo (BPM) |
 | `/live/song/get/is_playing` | → / ← | Transport läuft? |
-| `/live/song/get/current_song_time` | → / ← | Position in Beats; Polling ~10 Hz bei Playback |
+| `/live/song/get/current_song_time` | → / ← | Position in Beats; Polling ~10 Hz solange verbunden |
 | `/live/song/set/current_song_time` | → | Position setzen (Basis aller Setlist-Jumps) |
 | `/live/song/get/song_length` | → / ← | Arrangement-Länge in Beats |
 | `/live/song/get/cue_points` | → / ← | Locator-Liste (`name`, `time` alternierend) |
 | `/live/song/get/signature_numerator` / `_denominator` | → / ← | Taktart |
 | `/live/song/get/num_tracks` | → / ← | Track-Anzahl |
 | `/live/song/start_listen/<prop>` / `stop_listen` | → | Change-Listener (`tempo`, `is_playing`, Taktart) |
-| `/live/song/start_playing` / `stop_playing` / `continue_playing` | → | Transport |
+| `/live/song/stop_playing` / `continue_playing` | → | Transport (Play sendet `continue_playing`: `start_playing` würde an Lives Einfügemarke starten, nicht am Playhead) |
 | `/live/song/cue_point/jump` | → | Sprung auf Cue Point |
 | `/live/song/set/loop` / `loop_start` / `loop_length` | → | Loop-Bracket (Section-Loops) |
 | `/live/track/get|set/name·volume·mute·solo` | → / ← | Mixer (Argument: Track-Index) |

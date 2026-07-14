@@ -58,13 +58,14 @@ export function SongProgress({ song, big = false }: { song: Song; big?: boolean 
             </button>
           );
         })}
-        {/* Playhead */}
+        {/* Playhead — Positions-Updates kommen nur alle ~100 ms, die kurze
+            lineare Transition glättet das Stottern dazwischen */}
         <div
-          className="pointer-events-none absolute top-0 h-full w-0.5 bg-stage-text"
+          className="pointer-events-none absolute top-0 h-full w-0.5 bg-stage-text transition-[left] duration-150 ease-linear"
           style={{ left: `${progress * 100}%` }}
         />
         <div
-          className="pointer-events-none absolute top-0 h-full bg-stage-accent/15"
+          className="pointer-events-none absolute top-0 h-full bg-stage-accent/15 transition-[width] duration-150 ease-linear"
           style={{ width: `${progress * 100}%` }}
         />
       </div>
