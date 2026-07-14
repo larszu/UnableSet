@@ -254,7 +254,9 @@ export class MirrorBridge extends EventEmitter<AbletonBridgeEvents> implements A
 
   play(): void {
     this.primary.play();
-    this.broadcast(OSC_ADDR.song.startPlaying);
+    // Wie OscAbletonBridge.play(): continue_playing statt start_playing,
+    // damit auch die Spiegel-Rigs an der Playhead-Position starten.
+    this.broadcast(OSC_ADDR.song.continuePlaying);
   }
 
   stop(): void {

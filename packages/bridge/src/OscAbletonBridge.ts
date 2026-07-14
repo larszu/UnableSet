@@ -33,7 +33,7 @@ export interface OscAbletonBridgeOptions {
   remotePort?: number;
   /** Lokaler Empfangsport für Antworten. */
   localPort?: number;
-  /** Polling-Intervall für die Song-Position bei laufendem Playback (ms). */
+  /** Polling-Intervall für die Song-Position (ms), solange Live verbunden ist. */
   positionPollMs?: number;
   /** Heartbeat-Intervall (ms). */
   heartbeatMs?: number;
@@ -48,6 +48,13 @@ interface PendingRequest {
   resolve: (args: unknown[]) => void;
   timer: NodeJS.Timeout;
 }
+
+/** Schutzfenster nach einem Positions-Sprung: veraltete Antworten verwerfen. */
+const POSITION_PIN_MS = 500;
+/** Innerhalb des Schutzfensters gelten nur Positionen nahe dem Ziel als gültig. */
+const POSITION_PIN_TOLERANCE_BEATS = 2;
+/** Kleine Rücksprünge bei laufendem Playback = überholte UDP-Pakete. */
+const BACKWARD_JITTER_BEATS = 0.5;
 
 function argValues(packet: OscPacket): unknown[] {
   return packet.args.map((arg) => arg.value);
@@ -75,6 +82,8 @@ export class OscAbletonBridge extends EventEmitter<AbletonBridgeEvents> implemen
 
   private heartbeatTimer: NodeJS.Timeout | null = null;
   private positionTimer: NodeJS.Timeout | null = null;
+  private positionPinBeats: number | null = null;
+  private positionPinUntil = 0;
   private readonly pending = new Map<string, PendingRequest[]>();
 
   constructor(options: OscAbletonBridgeOptions = {}) {
@@ -178,7 +187,11 @@ export class OscAbletonBridge extends EventEmitter<AbletonBridgeEvents> implemen
   // -------------------------------------------------------------------------
 
   play(): void {
-    this.send(OSC_ADDR.song.startPlaying);
+    // Lives start_playing startet an der Arrangement-Einfügemarke — NICHT an
+    // der per set/current_song_time gesetzten Playhead-Position. Play soll
+    // aber genau dort losspielen, wo der Playhead (UI) steht, deshalb
+    // continue_playing.
+    this.send(OSC_ADDR.song.continuePlaying);
   }
 
   stop(): void {
@@ -198,6 +211,10 @@ export class OscAbletonBridge extends EventEmitter<AbletonBridgeEvents> implemen
     this.sendFloat(OSC_ADDR.song.setCurrentSongTime, beats);
     // Lokalen Zustand sofort nachziehen, damit Grenz-Checks nicht doppelt feuern
     this.transport.positionBeats = beats;
+    // Noch unterwegs befindliche Poll-Antworten tragen die ALTE Position und
+    // würden den Playhead kurz zurückreißen — kurzes Schutzfenster setzen.
+    this.positionPinBeats = beats;
+    this.positionPinUntil = Date.now() + POSITION_PIN_MS;
     this.emitTransport();
     this.send(OSC_ADDR.song.getCurrentSongTime);
   }
@@ -348,6 +365,10 @@ export class OscAbletonBridge extends EventEmitter<AbletonBridgeEvents> implemen
       this.send(oscStartListen(prop));
     }
 
+    // Position durchgehend pollen — auch im Stop-Zustand, damit die UI
+    // Playhead-Bewegungen sieht, die direkt in Live gemacht werden.
+    this.startPositionPolling();
+
     await Promise.allSettled([
       this.queryNumber(OSC_ADDR.song.getTempo),
       this.queryNumber(OSC_ADDR.song.getIsPlaying),
@@ -458,8 +479,6 @@ export class OscAbletonBridge extends EventEmitter<AbletonBridgeEvents> implemen
         const isPlaying = first === true || first === 1;
         if (isPlaying !== this.transport.isPlaying) {
           this.transport.isPlaying = isPlaying;
-          if (isPlaying) this.startPositionPolling();
-          else this.stopPositionPolling();
           // Position einmalig nachziehen (z. B. Sprung an Songanfang bei Stop)
           this.send(OSC_ADDR.song.getCurrentSongTime);
           this.emitTransport();
@@ -468,6 +487,7 @@ export class OscAbletonBridge extends EventEmitter<AbletonBridgeEvents> implemen
       }
       case OSC_ADDR.song.getCurrentSongTime:
         if (typeof first === 'number' && first !== this.transport.positionBeats) {
+          if (this.isStalePosition(first)) break;
           this.transport.positionBeats = first;
           this.emitTransport();
         }
@@ -492,6 +512,23 @@ export class OscAbletonBridge extends EventEmitter<AbletonBridgeEvents> implemen
       default:
         break;
     }
+  }
+
+  /**
+   * Erkennt veraltete/überholte Positions-Antworten (UDP garantiert keine
+   * Reihenfolge). Ohne diesen Filter springt der Playhead in der UI kurz
+   * vor und zurück („Zittern") — besonders direkt nach einem Sprung.
+   */
+  private isStalePosition(beats: number): boolean {
+    if (this.positionPinBeats !== null) {
+      if (Date.now() < this.positionPinUntil) {
+        if (Math.abs(beats - this.positionPinBeats) > POSITION_PIN_TOLERANCE_BEATS) return true;
+      } else {
+        this.positionPinBeats = null;
+      }
+    }
+    const delta = beats - this.transport.positionBeats;
+    return this.transport.isPlaying && delta < 0 && delta > -BACKWARD_JITTER_BEATS;
   }
 
   private emitTransport(): void {
