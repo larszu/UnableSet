@@ -1,5 +1,10 @@
 # UnableSet
 
+> **Browser-based setlist and playback controller for Ableton Live** — run a
+> live-reorderable setlist built from Ableton locators from any phone, tablet,
+> laptop or foot controller on the LAN. Offline, open source, remote control via
+> MIDI, OSC and Bitfocus Companion.
+
 Browser-basierter Setlist- und Playback-Controller für Ableton Live —
 quelloffene, eigenständige Neuimplementierung. Ein MD/Playback-Engineer,
 Musiker, Sänger oder Solo-Act steuert von jedem Gerät im LAN (Handy, iPad,
