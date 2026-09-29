@@ -1,5 +1,21 @@
 {
   "name": "unableset",
+  "description": "Browser-based setlist and playback controller for Ableton Live: build a live-reorderable setlist from locators and control it from any phone, tablet or foot controller on the LAN. Open-source, offline.",
+  "keywords": [
+    "ableton",
+    "ableton-live",
+    "setlist",
+    "playback",
+    "live-music",
+    "music",
+    "midi",
+    "osc",
+    "musician",
+    "stage",
+    "web-app",
+    "typescript",
+    "offline"
+  ],
   "private": true,
   "version": "0.1.0",
   "type": "module",
